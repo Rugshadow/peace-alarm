@@ -1,4 +1,4 @@
-package com.peacealarm
+package com.peacealarm.app
 
 import android.app.Application
 import android.content.res.Configuration

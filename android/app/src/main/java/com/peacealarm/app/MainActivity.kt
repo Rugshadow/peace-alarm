@@ -1,4 +1,4 @@
-package com.peacealarm
+package com.peacealarm.app
 
 import android.os.Build
 import android.os.Bundle
