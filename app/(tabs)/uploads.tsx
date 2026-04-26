@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import ChannelAvatar from '../../components/ChannelAvatar';
 import AudioListRow from '../../components/AudioListRow';
 import RecordSheet from '../../components/RecordSheet';

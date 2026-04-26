@@ -1,42 +1,31 @@
 import { useState, useCallback, useRef } from 'react';
-import { Audio } from 'expo-av';
+import { useAudioPlayer as useExpoAudioPlayer } from 'expo-audio';
 
 export function useAudioPlayer() {
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const currentIdRef = useRef<string | null>(null);
+  const player = useExpoAudioPlayer(null);
 
   const play = useCallback(async (id: string, uri: string) => {
-    if (soundRef.current) {
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
-    }
-
-    if (playingId === id) {
+    if (currentIdRef.current === id) {
+      player.pause();
+      currentIdRef.current = null;
       setPlayingId(null);
       return;
     }
 
-    const { sound } = await Audio.Sound.createAsync({ uri });
-    soundRef.current = sound;
+    if (!uri) return;
+    currentIdRef.current = id;
     setPlayingId(id);
-
-    await sound.playAsync();
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        setPlayingId(null);
-      }
-    });
-  }, [playingId]);
+    player.replace({ uri });
+    player.play();
+  }, [player]);
 
   const stop = useCallback(async () => {
-    if (soundRef.current) {
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
-    }
+    player.pause();
+    currentIdRef.current = null;
     setPlayingId(null);
-  }, []);
+  }, [player]);
 
   return { playingId, play, stop };
 }

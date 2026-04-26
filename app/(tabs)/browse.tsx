@@ -22,6 +22,7 @@ const MOCK_CHANNELS: Channel[] = [
   {
     id: '1', name: 'Morning Mindset', genre: 'health', listeners: 12400,
     bio: 'Start your day with powerful mindset shifts and positive affirmations.',
+    imageUrl: 'https://picsum.photos/seed/mindset/300/300',
     uploads: [
       { id: 'u1', title: 'Rise & Shine', date: 'Apr 24', duration: 95, audioUrl: '' },
       { id: 'u2', title: 'Monday Energy', date: 'Apr 21', duration: 112, audioUrl: '' },
@@ -30,6 +31,7 @@ const MOCK_CHANNELS: Channel[] = [
   {
     id: '2', name: 'Daily Jazz', genre: 'music', listeners: 8900,
     bio: 'Smooth jazz to ease you into your morning.',
+    imageUrl: 'https://picsum.photos/seed/jazz/300/300',
     uploads: [
       { id: 'u3', title: 'Blue Morning', date: 'Apr 23', duration: 180, audioUrl: '' },
     ],
@@ -37,6 +39,7 @@ const MOCK_CHANNELS: Channel[] = [
   {
     id: '3', name: 'News Brief', genre: 'news', listeners: 34000,
     bio: 'Two-minute daily news summary — everything you need before coffee.',
+    imageUrl: 'https://picsum.photos/seed/news/300/300',
     uploads: [
       { id: 'u4', title: 'Apr 25 Update', date: 'Apr 25', duration: 120, audioUrl: '' },
       { id: 'u5', title: 'Apr 24 Update', date: 'Apr 24', duration: 118, audioUrl: '', isScheduled: true },
@@ -45,6 +48,7 @@ const MOCK_CHANNELS: Channel[] = [
   {
     id: '4', name: 'Laugh Start', genre: 'comedy', listeners: 5600,
     bio: 'A daily joke to kickstart your morning with a smile.',
+    imageUrl: 'https://picsum.photos/seed/comedy/300/300',
     uploads: [
       { id: 'u6', title: "Friday's Joke", date: 'Apr 25', duration: 45, audioUrl: '' },
     ],
@@ -52,6 +56,7 @@ const MOCK_CHANNELS: Channel[] = [
   {
     id: '5', name: 'Zen Morning', genre: 'ambient', listeners: 21000,
     bio: 'Calming nature sounds and gentle meditation guidance.',
+    imageUrl: 'https://picsum.photos/seed/zen/300/300',
     uploads: [
       { id: 'u7', title: 'Forest Rain', date: 'Apr 22', duration: 240, audioUrl: '' },
     ],
@@ -59,6 +64,7 @@ const MOCK_CHANNELS: Channel[] = [
   {
     id: '6', name: 'Word of Day', genre: 'education', listeners: 7800,
     bio: 'Expand your vocabulary one morning at a time.',
+    imageUrl: 'https://picsum.photos/seed/wordday/300/300',
     uploads: [
       { id: 'u8', title: 'Ephemeral', date: 'Apr 25', duration: 60, audioUrl: '' },
     ],
@@ -93,9 +99,9 @@ function CarouselSection({
           <TouchableOpacity
             onPress={() => onPress(item)}
             className="items-center"
-            style={{ width: 90 }}
+            style={{ width: 120 }}
           >
-            <ChannelAvatar id={item.id} name={item.name} size="carousel" />
+            <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
             <Text
               className="text-[12px] text-text-secondary mt-2 text-center"
               numberOfLines={2}

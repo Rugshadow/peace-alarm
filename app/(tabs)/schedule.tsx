@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, Image, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import AlarmSheet, { type AlarmData } from '../../components/AlarmSheet';
@@ -42,12 +42,11 @@ export default function ScheduleScreen() {
     return (
       <>
         <View className="flex-1 bg-white items-center justify-center px-8">
-          <View
-            className="w-24 h-24 rounded-3xl items-center justify-center mb-6"
-            style={{ backgroundColor: Colors.primaryLight }}
-          >
-            <Text style={{ fontSize: 44 }}>⏰</Text>
-          </View>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={{ width: 96, height: 96, borderRadius: 24, marginBottom: 24 }}
+            resizeMode="cover"
+          />
           <Text className="text-[20px] font-bold text-text-primary mb-2">No alarms yet</Text>
           <Text className="text-text-secondary text-[15px] text-center mb-8">
             Set your first alarm to wake up to your favorite creator

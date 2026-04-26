@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import AccountSheet from '../../components/AccountSheet';
 
 function Header({ title }: { title: string }) {
@@ -13,16 +14,14 @@ function Header({ title }: { title: string }) {
 
   return (
     <>
-      <SafeAreaView className="bg-white border-b border-gray-100">
-        <View className="flex-row items-center px-4 py-2 h-14">
-          <View className="flex-row items-center gap-2 flex-1">
-            <View
-              className="w-8 h-8 rounded-lg items-center justify-center"
-              style={{ backgroundColor: Colors.primary }}
-            >
-              <Ionicons name="alarm" size={18} color="white" />
-            </View>
-            <Text className="font-bold text-[15px] text-text-primary">Peace Alarm</Text>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
+        <View className="flex-row items-center px-4 pb-2" style={{ height: 44 }}>
+          <View className="flex-1">
+            <Image
+              source={require('../../assets/icon.png')}
+              style={{ width: 36, height: 36, borderRadius: 8 }}
+              resizeMode="contain"
+            />
           </View>
 
           <Text className="text-[17px] font-semibold text-text-primary absolute left-0 right-0 text-center">
@@ -32,16 +31,14 @@ function Header({ title }: { title: string }) {
           {isLoggedIn ? (
             <TouchableOpacity
               onPress={() => setShowAccount(true)}
-              className="rounded-full px-4 py-1.5"
-              style={{ backgroundColor: Colors.primary }}
+              className="rounded-full px-4 py-1.5 bg-black/10"
             >
               <Text className="font-semibold text-[14px] text-text-primary">Account</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               onPress={() => router.push('/auth/login')}
-              className="rounded-full px-4 py-1.5 border"
-              style={{ borderColor: Colors.textPrimary }}
+              className="rounded-full px-4 py-1.5 bg-white"
             >
               <Text className="font-semibold text-[14px] text-text-primary">Log In</Text>
             </TouchableOpacity>
@@ -59,9 +56,9 @@ export default function TabLayout() {
       screenOptions={({ route }) => ({
         header: () => {
           const titles: Record<string, string> = {
-            browse: 'Browse',
+            browse: 'Browse Alarm Feeds',
             favorites: 'Favorites',
-            schedule: 'Schedule',
+            schedule: 'Scheduled Alarms',
             uploads: 'Uploads',
           };
           return <Header title={titles[route.name] ?? ''} />;

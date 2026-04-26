@@ -1,117 +1,87 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import React from 'react';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  const handleEmailLogin = async () => {
-    if (!email || !password) return;
-    setLoading(true);
-    setError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-    else router.replace('/(tabs)/browse');
-    setLoading(false);
+  const handleGoogleLogin = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'peace-alarm://auth/callback',
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error || !data.url) return;
+    const result = await WebBrowser.openAuthSessionAsync(data.url, 'peace-alarm://auth/callback');
+    if (result.type === 'success') {
+      const url = new URL(result.url);
+      const accessToken = url.searchParams.get('access_token') ?? new URLSearchParams(url.hash.slice(1)).get('access_token');
+      const refreshToken = url.searchParams.get('refresh_token') ?? new URLSearchParams(url.hash.slice(1)).get('refresh_token');
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        router.replace('/(tabs)/browse');
+      }
+    }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
-      >
-        <View className="px-4 py-3">
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
+    <SafeAreaView className="flex-1 bg-white" style={{ backgroundColor: 'white' }} edges={['top', 'left', 'right']}>
+      <View className="flex-1 px-6 items-center justify-center">
+        <Image
+          source={require('../../assets/icon.png')}
+          style={{ width: 96, height: 96, borderRadius: 24, marginBottom: 24 }}
+          resizeMode="cover"
+        />
+        <Text className="text-[28px] font-bold text-text-primary mb-1">Peace Alarm</Text>
+        <Text className="text-text-secondary text-[15px] mb-10">Wake up to what you love</Text>
+
+        <TouchableOpacity onPress={handleGoogleLogin} className="w-full flex-row items-center justify-center gap-3 bg-surface rounded-2xl py-4 mb-3">
+          <FontAwesome name="google" size={20} color="#4285F4" />
+          <Text className="font-semibold text-[16px] text-text-primary">Log in with Google</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push('/auth/login-email')}
+          className="w-full flex-row items-center justify-center rounded-2xl py-4 mb-4"
+          style={{ backgroundColor: Colors.primary }}
+        >
+          <Text className="font-semibold text-[16px] text-text-primary">Log in with Email</Text>
+        </TouchableOpacity>
+
+        <View className="flex-row items-center gap-4 w-full mb-4">
+          <View className="flex-1 h-px bg-gray-200" />
+          <Text className="text-text-secondary text-[14px]">or</Text>
+          <View className="flex-1 h-px bg-gray-200" />
         </View>
 
-        <View className="flex-1 px-6 pt-6">
-          <View className="items-center mb-10">
-            <View
-              className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-              style={{ backgroundColor: Colors.primary }}
-            >
-              <Ionicons name="alarm" size={36} color="white" />
-            </View>
-            <Text className="text-[26px] font-bold text-text-primary">Welcome back</Text>
-            <Text className="text-text-secondary text-[15px] mt-1">Log in to Peace Alarm</Text>
-          </View>
+        <TouchableOpacity
+          onPress={() => router.push('/auth/signup')}
+          className="w-full items-center rounded-2xl py-4 border"
+          style={{ borderColor: Colors.textSecondary }}
+        >
+          <Text className="font-semibold text-[16px] text-text-primary">Create an Account</Text>
+        </TouchableOpacity>
+      </View>
 
-          <TouchableOpacity
-            className="flex-row items-center justify-center gap-3 bg-surface rounded-2xl py-4 mb-4"
-          >
-            <Text style={{ fontSize: 20 }}>G</Text>
-            <Text className="font-semibold text-[16px] text-text-primary">Continue with Google</Text>
-          </TouchableOpacity>
-
-          <View className="flex-row items-center gap-4 mb-4">
-            <View className="flex-1 h-px bg-gray-200" />
-            <Text className="text-text-secondary text-[14px]">or</Text>
-            <View className="flex-1 h-px bg-gray-200" />
-          </View>
-
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Email address"
-            placeholderTextColor={Colors.textSecondary}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            className="bg-surface rounded-2xl px-4 py-4 text-[15px] text-text-primary mb-3"
-          />
-
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Password"
-            placeholderTextColor={Colors.textSecondary}
-            secureTextEntry
-            className="bg-surface rounded-2xl px-4 py-4 text-[15px] text-text-primary mb-2"
-          />
-
-          {error ? (
-            <Text className="text-destructive text-[14px] mb-3">{error}</Text>
-          ) : null}
-
-          <TouchableOpacity
-            onPress={handleEmailLogin}
-            disabled={loading}
-            className="rounded-full py-4 items-center mt-4"
-            style={{ backgroundColor: Colors.primaryDark }}
-          >
-            <Text className="font-bold text-[16px] text-text-primary">
-              {loading ? 'Logging in...' : 'Log In'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push('/auth/signup')}
-            className="items-center mt-6"
-          >
-            <Text className="text-text-secondary text-[15px]">
-              Don't have an account?{' '}
-              <Text className="font-semibold text-text-primary">Create one</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      <View style={{ backgroundColor: Colors.primary }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="flex-row items-center justify-center gap-1 py-4"
+          style={{ paddingBottom: 24 }}
+        >
+          <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+          <Text className="font-medium text-[15px] text-text-primary">Back</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }

@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
@@ -38,38 +39,35 @@ export default function SignupScreen() {
         username,
       });
     }
+    if (!data.session) {
+      setError('Please check your email to confirm your account.');
+      setLoading(false);
+      return;
+    }
     router.replace('/(tabs)/browse');
     setLoading(false);
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
       >
-        <View className="px-4 py-3">
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-
         <ScrollView className="flex-1 px-6 pt-6" keyboardShouldPersistTaps="handled">
           <View className="items-center mb-10">
-            <View
-              className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-              style={{ backgroundColor: Colors.primary }}
-            >
-              <Ionicons name="alarm" size={36} color="white" />
-            </View>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 16 }}
+              resizeMode="cover"
+            />
             <Text className="text-[26px] font-bold text-text-primary">Create account</Text>
-            <Text className="text-text-secondary text-[15px] mt-1">Join Peace Alarm</Text>
           </View>
 
           <TouchableOpacity
             className="flex-row items-center justify-center gap-3 bg-surface rounded-2xl py-4 mb-4"
           >
-            <Text style={{ fontSize: 20 }}>G</Text>
+            <FontAwesome name="google" size={20} color="#4285F4" />
             <Text className="font-semibold text-[16px] text-text-primary">Sign up with Google</Text>
           </TouchableOpacity>
 
@@ -115,7 +113,7 @@ export default function SignupScreen() {
             onPress={handleSignup}
             disabled={loading}
             className="rounded-full py-4 items-center mt-4 mb-8"
-            style={{ backgroundColor: Colors.primaryDark }}
+            style={{ backgroundColor: Colors.primary }}
           >
             <Text className="font-bold text-[16px] text-text-primary">
               {loading ? 'Creating account...' : 'Create Account'}
@@ -123,6 +121,17 @@ export default function SignupScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <View style={{ backgroundColor: Colors.primary }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="flex-row items-center justify-center gap-1 py-4"
+          style={{ paddingBottom: 24 }}
+        >
+          <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+          <Text className="font-medium text-[15px] text-text-primary">Back</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }

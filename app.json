@@ -6,20 +6,26 @@
     "scheme": "peace-alarm",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "icon": "./assets/icon.png",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.peacealarm.app"
+      "bundleIdentifier": "com.peacealarm.app",
+      "icon": "./assets/icon.png"
     },
     "android": {
       "package": "com.peacealarm.app",
       "adaptiveIcon": {
-        "backgroundColor": "#BFDE30"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#DFFF00"
       }
     },
     "plugins": [
       "expo-router",
-      "expo-av"
+      "expo-av",
+      "expo-web-browser"
     ]
   }
 }

@@ -1,0 +1,87 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/colors';
+import { supabase } from '../../lib/supabase';
+
+export default function LoginEmailScreen() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLogin = async () => {
+    if (!email || !password) return;
+    setLoading(true);
+    setError('');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message);
+    else router.replace('/(tabs)/browse');
+    setLoading(false);
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+        <View className="flex-1 px-6 justify-center">
+          <Text className="text-text-secondary text-[15px] mb-8">Log in with your email</Text>
+
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email address"
+            placeholderTextColor={Colors.textSecondary}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            className="bg-surface rounded-2xl px-4 py-4 text-[15px] text-text-primary mb-3"
+          />
+
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            placeholderTextColor={Colors.textSecondary}
+            secureTextEntry
+            className="bg-surface rounded-2xl px-4 py-4 text-[15px] text-text-primary mb-2"
+          />
+
+          {error ? (
+            <Text className="text-destructive text-[14px] mb-3">{error}</Text>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={handleLogin}
+            disabled={loading}
+            className="rounded-full py-4 items-center mt-4"
+            style={{ backgroundColor: Colors.primaryDark }}
+          >
+            <Text className="font-bold text-[16px] text-text-primary">
+              {loading ? 'Logging in...' : 'Log In'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      <View style={{ backgroundColor: Colors.primary }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="flex-row items-center justify-center gap-1 py-4"
+          style={{ paddingBottom: 24 }}
+        >
+          <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+          <Text className="font-medium text-[15px] text-text-primary">Back</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}

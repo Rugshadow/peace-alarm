@@ -11,16 +11,19 @@ const MOCK_SAVED_CHANNELS: Channel[] = [
   {
     id: '1', name: 'Morning Mindset', genre: 'health', listeners: 12400,
     bio: 'Start your day with powerful mindset shifts.',
+    imageUrl: 'https://picsum.photos/seed/mindset/300/300',
     uploads: [],
   },
   {
     id: '2', name: 'Daily Jazz', genre: 'music', listeners: 8900,
     bio: 'Smooth jazz to ease you into your morning.',
+    imageUrl: 'https://picsum.photos/seed/jazz/300/300',
     uploads: [],
   },
   {
     id: '5', name: 'Zen Morning', genre: 'ambient', listeners: 21000,
     bio: 'Calming nature sounds.',
+    imageUrl: 'https://picsum.photos/seed/zen/300/300',
     uploads: [],
   },
 ];
@@ -74,7 +77,7 @@ export default function FavoritesScreen() {
           columnWrapperStyle={{ gap: 16 }}
           renderItem={({ item }) => (
             <TouchableOpacity className="flex-1 items-center">
-              <ChannelAvatar id={item.id} name={item.name} size="carousel" />
+              <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
               <Text
                 className="text-[12px] text-text-secondary mt-2 text-center"
                 numberOfLines={2}

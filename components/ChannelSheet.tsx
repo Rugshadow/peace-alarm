@@ -5,8 +5,8 @@ import {
   Modal,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import ChannelAvatar from './ChannelAvatar';
@@ -20,6 +20,7 @@ export type Channel = {
   listeners: number;
   bio: string;
   uploads: AudioClip[];
+  imageUrl?: string;
 };
 
 export type AudioClip = {
@@ -78,7 +79,7 @@ export default function ChannelSheet({
 
         <ScrollView>
           <View className="items-center px-6 pt-8 pb-6">
-            <ChannelAvatar id={channel.id} name={channel.name} size="large" />
+            <ChannelAvatar id={channel.id} name={channel.name} size="large" imageUrl={channel.imageUrl} />
             <Text className="text-[22px] font-bold text-text-primary mt-4">{channel.name}</Text>
             <Text className="text-text-secondary text-[14px] mt-1">
               {channel.listeners.toLocaleString()} listeners · {channel.genre}
