@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import ChannelAvatar from './ChannelAvatar';
@@ -14,6 +14,7 @@ type Props = {
   isPlaying: boolean;
   isFavorited?: boolean;
   isScheduled?: boolean;
+  imageUrl?: string;
   onPress: () => void;
   onFavorite?: () => void;
   onDelete?: () => void;
@@ -35,6 +36,7 @@ export default function AudioListRow({
   isPlaying,
   isFavorited,
   isScheduled,
+  imageUrl,
   onPress,
   onFavorite,
   onDelete,
@@ -42,17 +44,18 @@ export default function AudioListRow({
   return (
     <View className="flex-row items-center py-3 px-4 bg-white border-b border-gray-100">
       <TouchableOpacity onPress={onPress} className="mr-3">
-        <View
-          style={{ width: 50, height: 50, borderRadius: 10 }}
-          className={`items-center justify-center ${isScheduled ? 'bg-surface' : ''}`}
-        >
+        <View style={{ width: 50, height: 50 }} className="items-center justify-center">
           {isScheduled ? (
-            <Ionicons name="moon" size={24} color={Colors.textSecondary} />
+            <View style={{ width: 50, height: 50, borderRadius: 10 }} className="bg-surface items-center justify-center">
+              <Ionicons name="moon" size={24} color={Colors.textSecondary} />
+            </View>
+          ) : imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={{ width: 50, height: 50, borderRadius: 0 }} resizeMode="cover" />
           ) : (
             <ChannelAvatar id={channelId} name={channelName} size="list" />
           )}
           {isPlaying && (
-            <View className="absolute inset-0 items-center justify-center bg-black/30 rounded-[10px]">
+            <View className="absolute inset-0 items-center justify-center bg-black/30">
               <Ionicons name="pause" size={20} color="white" />
             </View>
           )}

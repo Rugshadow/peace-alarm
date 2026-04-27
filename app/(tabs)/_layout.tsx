@@ -7,16 +7,24 @@ import { Colors } from '../../constants/colors';
 import { useAuth } from '../../contexts/AuthContext';
 import AccountSheet from '../../components/AccountSheet';
 
-function Header({ title }: { title: string }) {
-  const { isLoggedIn } = useAuth();
+function Header({ routeName }: { routeName: string }) {
+  const { isLoggedIn, username } = useAuth();
   const router = useRouter();
   const [showAccount, setShowAccount] = useState(false);
+
+  const titles: Record<string, string> = {
+    browse: 'Browse Alarm Feeds',
+    favorites: 'Favorites',
+    schedule: 'Scheduled Alarms',
+    uploads: username ? `${username}'s Uploads` : 'Uploads',
+  };
+  const title = titles[routeName] ?? '';
 
   return (
     <>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
         <View className="flex-row items-center px-4 pb-2" style={{ height: 44 }}>
-          <View className="flex-1">
+          <View style={{ width: 40 }}>
             <Image
               source={require('../../assets/icon.png')}
               style={{ width: 36, height: 36, borderRadius: 8 }}
@@ -24,16 +32,17 @@ function Header({ title }: { title: string }) {
             />
           </View>
 
-          <Text className="text-[17px] font-semibold text-text-primary absolute left-0 right-0 text-center">
+          <Text
+            className="text-[17px] font-semibold text-text-primary text-center"
+            style={{ flex: 1 }}
+            numberOfLines={1}
+          >
             {title}
           </Text>
 
           {isLoggedIn ? (
-            <TouchableOpacity
-              onPress={() => setShowAccount(true)}
-              className="rounded-full px-4 py-1.5 bg-black/10"
-            >
-              <Text className="font-semibold text-[14px] text-text-primary">Account</Text>
+            <TouchableOpacity onPress={() => setShowAccount(true)} style={{ width: 40, alignItems: 'flex-end' }}>
+              <Ionicons name="person-circle" size={34} color="white" />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -55,13 +64,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={({ route }) => ({
         header: () => {
-          const titles: Record<string, string> = {
-            browse: 'Browse Alarm Feeds',
-            favorites: 'Favorites',
-            schedule: 'Scheduled Alarms',
-            uploads: 'Uploads',
-          };
-          return <Header title={titles[route.name] ?? ''} />;
+          return <Header routeName={route.name} />;
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,

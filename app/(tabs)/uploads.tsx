@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { decode } from 'base64-arraybuffer';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../contexts/AuthContext';
-import ChannelAvatar from '../../components/ChannelAvatar';
+import { supabase } from '../../lib/supabase';
 import AudioListRow from '../../components/AudioListRow';
 import RecordSheet from '../../components/RecordSheet';
+import CreateChannelSheet from '../../components/CreateChannelSheet';
 
 type Upload = {
   id: string;
@@ -23,15 +25,41 @@ const MOCK_UPLOADS: Upload[] = [
   { id: 'u3', title: 'Sunday Special', date: 'Apr 20', duration: 75, plays: 0, isScheduled: true },
 ];
 
-const LOGGED_OUT_ID = 'logged-out-placeholder';
-
 export default function UploadsScreen() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, session } = useAuth();
   const router = useRouter();
   const [recordVisible, setRecordVisible] = useState(false);
   const [contentOrder, setContentOrder] = useState<'newest_first' | 'oldest_first'>('newest_first');
   const [uploads, setUploads] = useState<Upload[]>(MOCK_UPLOADS);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [hasChannels, setHasChannels] = useState<boolean | null>(null);
+  const [createChannelVisible, setCreateChannelVisible] = useState(false);
+  const [channelName, setChannelName] = useState<string>('Your Channel');
+  const [channelCover, setChannelCover] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isLoggedIn && session) fetchChannelData();
+  }, [isLoggedIn, session]);
+
+  const fetchChannelData = async () => {
+    const { data: userData } = await supabase
+      .from('users')
+      .select('channels')
+      .eq('user_id', session!.user.id)
+      .single();
+    const channelIds: string[] = userData?.channels ?? [];
+    if (channelIds.length === 0) { setHasChannels(false); return; }
+    const { data: channel } = await supabase
+      .from('channels')
+      .select('name, cover_photo')
+      .eq('channel_id', channelIds[0])
+      .single();
+    if (channel) {
+      setChannelName(channel.name);
+      setChannelCover(channel.cover_photo ?? null);
+    }
+    setHasChannels(true);
+  };
 
   if (!isLoggedIn) {
     return (
@@ -51,6 +79,78 @@ export default function UploadsScreen() {
           <Text className="font-bold text-[16px] text-text-primary">Log In to Upload</Text>
         </TouchableOpacity>
       </View>
+    );
+  }
+
+  if (hasChannels === null) {
+    return (
+      <View className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (hasChannels === false) {
+    return (
+      <>
+        <View className="flex-1 bg-white items-center justify-center px-8">
+          <Ionicons name="radio-outline" size={64} color={Colors.primary} />
+          <Text className="text-[20px] font-bold text-text-primary mt-4 mb-2 text-center">
+            No channels yet
+          </Text>
+          <Text className="text-text-secondary text-[15px] text-center mb-8">
+            Create a channel to start uploading content for your listeners.
+          </Text>
+          <TouchableOpacity
+            onPress={() => setCreateChannelVisible(true)}
+            className="rounded-full px-8 py-3.5"
+            style={{ backgroundColor: Colors.primary }}
+          >
+            <Text className="font-bold text-[16px] text-text-primary">Create a Channel</Text>
+          </TouchableOpacity>
+        </View>
+        <CreateChannelSheet
+          visible={createChannelVisible}
+          onClose={() => setCreateChannelVisible(false)}
+          onSave={async ({ name, genre, coverPhotoUri, coverPhotoBase64 }) => {
+            if (!session) return;
+
+            let coverUrl: string | null = null;
+            if (coverPhotoUri && coverPhotoBase64) {
+              const ext = coverPhotoUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+              const fileName = `${session.user.id}-${Date.now()}.${ext}`;
+              const arrayBuffer = decode(coverPhotoBase64);
+              const { error: uploadError } = await supabase.storage
+                .from('channel-covers')
+                .upload(fileName, arrayBuffer, { contentType: `image/${ext}` });
+              if (uploadError) {
+                Alert.alert('Upload failed', uploadError.message);
+              } else {
+                const { data: urlData } = supabase.storage.from('channel-covers').getPublicUrl(fileName);
+                coverUrl = urlData.publicUrl;
+              }
+            }
+
+            const { data: channel, error } = await supabase
+              .from('channels')
+              .insert({ owner_id: session.user.id, name, genre, cover_photo: coverUrl })
+              .select('channel_id')
+              .single();
+            if (error || !channel) return;
+            const { data: userData } = await supabase
+              .from('users')
+              .select('channels')
+              .eq('user_id', session.user.id)
+              .single();
+            const updated = [...(userData?.channels ?? []), channel.channel_id];
+            await supabase.from('users').update({ channels: updated }).eq('user_id', session.user.id);
+            setCreateChannelVisible(false);
+            setChannelName(name);
+            setChannelCover(coverUrl);
+            setHasChannels(true);
+          }}
+        />
+      </>
     );
   }
 
@@ -76,14 +176,31 @@ export default function UploadsScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View>
-            <View className="px-4 pt-4 pb-3 flex-row items-center gap-4">
-              <ChannelAvatar id="my-channel" name="My Channel" size="list" />
-              <View>
-                <Text className="text-[17px] font-bold text-text-primary">Your Channel</Text>
-                <Text className="text-text-secondary text-[13px]">
-                  {uploads.length} upload{uploads.length !== 1 ? 's' : ''}
-                </Text>
-              </View>
+            <View className="flex-row gap-3 px-4 pt-4">
+              <TouchableOpacity
+                className="flex-1 rounded-full py-3 items-center"
+                style={{ backgroundColor: Colors.primary }}
+              >
+                <Text className="font-bold text-[15px] text-text-primary">My Channels</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 rounded-full py-3 items-center border"
+                style={{ borderColor: Colors.primary }}
+              >
+                <Text className="font-medium text-[15px] text-text-primary">Edit Channel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View className="items-center pt-6 pb-6 px-6">
+              <Image
+                source={channelCover ? { uri: channelCover } : require('../../assets/icon.png')}
+                style={{ width: 220, height: 220 }}
+                resizeMode="cover"
+              />
+              <Text className="text-[20px] font-bold text-text-primary mt-4">{channelName}</Text>
+              <Text className="text-text-secondary text-[13px] mt-1">
+                {uploads.length} upload{uploads.length !== 1 ? 's' : ''}
+              </Text>
             </View>
 
             <View className="flex-row gap-3 px-4 mb-4">
@@ -135,7 +252,7 @@ export default function UploadsScreen() {
           <AudioListRow
             id={item.id}
             title={item.title}
-            channelName="Your Channel"
+            channelName={channelName}
             channelId="my-channel"
             date={item.date}
             duration={item.duration}

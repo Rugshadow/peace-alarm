@@ -63,7 +63,7 @@ export default function LoginEmailScreen() {
             onPress={handleLogin}
             disabled={loading}
             className="rounded-full py-4 items-center mt-4"
-            style={{ backgroundColor: Colors.primaryDark }}
+            style={{ backgroundColor: Colors.primary }}
           >
             <Text className="font-bold text-[16px] text-text-primary">
               {loading ? 'Logging in...' : 'Log In'}

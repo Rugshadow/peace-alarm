@@ -27,7 +27,7 @@ export default function SignupScreen() {
     if (!email || !username || !password) return;
     setLoading(true);
     setError('');
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
     if (error) {
       setError(error.message);
       setLoading(false);

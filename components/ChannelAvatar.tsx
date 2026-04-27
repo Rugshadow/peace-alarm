@@ -12,7 +12,7 @@ type Props = {
 const SIZE_MAP = {
   carousel: { container: 120, text: 36, radius: 0 },
   list: { container: 60, text: 20, radius: 0 },
-  large: { container: 120, text: 40, radius: 0 },
+  large: { container: 220, text: 40, radius: 0 },
 };
 
 export default function ChannelAvatar({ id, name, size = 'carousel', imageUrl }: Props) {

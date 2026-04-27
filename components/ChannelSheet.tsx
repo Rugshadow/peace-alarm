@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import { Colors } from '../constants/colors';
 import ChannelAvatar from './ChannelAvatar';
 import AudioListRow from './AudioListRow';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export type Channel = {
   id: string;
@@ -30,53 +32,80 @@ export type AudioClip = {
   duration: number;
   audioUrl: string;
   isScheduled?: boolean;
+  imageUrl?: string;
 };
 
 type Props = {
   channel: Channel | null;
   visible: boolean;
   onClose: () => void;
-  savedChannels: string[];
-  onToggleSave: (id: string) => void;
   onSetAlarm: (channel: Channel) => void;
 };
 
-export default function ChannelSheet({
-  channel,
-  visible,
-  onClose,
-  savedChannels,
-  onToggleSave,
-  onSetAlarm,
-}: Props) {
+export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: Props) {
+  const { session, isLoggedIn } = useAuth();
   const { playingId, play, stop } = useAudioPlayer();
+  const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteClips, setFavoriteClips] = useState<string[]>([]);
 
-  if (!channel) return null;
+  useEffect(() => {
+    if (isLoggedIn && session && channel) checkFavoriteStatus();
+  }, [channel, isLoggedIn, session]);
 
-  const isSaved = savedChannels.includes(channel.id);
+  const checkFavoriteStatus = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('favorite_channels, favorite_samples')
+      .eq('user_id', session!.user.id)
+      .single();
+    setIsFavorited((data?.favorite_channels ?? []).includes(channel!.id));
+    setFavoriteClips(data?.favorite_samples ?? []);
+  };
+
+  const toggleFavorite = async () => {
+    if (!isLoggedIn || !session || !channel) return;
+    const { data } = await supabase
+      .from('users')
+      .select('favorite_channels')
+      .eq('user_id', session.user.id)
+      .single();
+
+    const current: string[] = data?.favorite_channels ?? [];
+    const updated = isFavorited
+      ? current.filter((id) => id !== channel.id)
+      : [...current, channel.id];
+
+    await supabase.from('users').update({ favorite_channels: updated }).eq('user_id', session.user.id);
+    setIsFavorited(!isFavorited);
+  };
+
+  if (!channel) return null;
 
   const handleClose = async () => {
     await stop();
     onClose();
   };
 
-  const toggleFavoriteClip = (clipId: string) => {
-    setFavoriteClips((prev) =>
-      prev.includes(clipId) ? prev.filter((id) => id !== clipId) : [...prev, clipId]
-    );
+  const toggleFavoriteClip = async (clipId: string) => {
+    if (!isLoggedIn || !session) return;
+    const { data } = await supabase
+      .from('users')
+      .select('favorite_samples')
+      .eq('user_id', session.user.id)
+      .single();
+
+    const current: string[] = data?.favorite_samples ?? [];
+    const updated = current.includes(clipId)
+      ? current.filter((id) => id !== clipId)
+      : [...current, clipId];
+
+    await supabase.from('users').update({ favorite_samples: updated }).eq('user_id', session.user.id);
+    setFavoriteClips(updated);
   };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView className="flex-1 bg-white">
-        <View className="flex-row items-center px-4 py-3 border-b border-gray-100">
-          <TouchableOpacity onPress={handleClose} className="mr-3">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text className="text-[17px] font-semibold text-text-primary flex-1">Channel</Text>
-        </View>
-
+      <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
         <ScrollView>
           <View className="items-center px-6 pt-8 pb-6">
             <ChannelAvatar id={channel.id} name={channel.name} size="large" imageUrl={channel.imageUrl} />
@@ -92,25 +121,25 @@ export default function ChannelSheet({
               <TouchableOpacity
                 onPress={() => onSetAlarm(channel)}
                 className="flex-1 rounded-full py-3 items-center"
-                style={{ backgroundColor: Colors.primaryDark }}
+                style={{ backgroundColor: Colors.primary }}
               >
-                <Text className="font-bold text-[15px]" style={{ color: Colors.textPrimary }}>
-                  Set as Alarm
-                </Text>
+                <Text className="font-bold text-[15px] text-text-primary">Set as Alarm</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => onToggleSave(channel.id)}
-                className="flex-1 rounded-full py-3 items-center border"
-                style={{
-                  borderColor: Colors.primaryDark,
-                  backgroundColor: isSaved ? Colors.primaryLight : Colors.background,
-                }}
-              >
-                <Text className="font-medium text-[15px]" style={{ color: Colors.textPrimary }}>
-                  {isSaved ? '★ Saved' : '☆ Save'}
-                </Text>
-              </TouchableOpacity>
+              {isLoggedIn && (
+                <TouchableOpacity
+                  onPress={toggleFavorite}
+                  className="flex-1 rounded-full py-3 items-center border"
+                  style={{
+                    borderColor: Colors.primary,
+                    backgroundColor: isFavorited ? Colors.primary : 'transparent',
+                  }}
+                >
+                  <Text className="font-medium text-[15px] text-text-primary">
+                    {isFavorited ? '★ Favorite' : '☆ Favorite'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -132,11 +161,23 @@ export default function ChannelSheet({
               isPlaying={playingId === clip.id}
               isFavorited={favoriteClips.includes(clip.id)}
               isScheduled={clip.isScheduled}
+              imageUrl={clip.imageUrl}
               onPress={() => play(clip.id, clip.audioUrl)}
               onFavorite={() => toggleFavoriteClip(clip.id)}
             />
           ))}
         </ScrollView>
+
+        <View style={{ backgroundColor: Colors.primary }}>
+          <TouchableOpacity
+            onPress={handleClose}
+            className="flex-row items-center justify-center gap-1 py-4"
+            style={{ paddingBottom: 24 }}
+          >
+            <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+            <Text className="font-medium text-[15px] text-text-primary">Back</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     </Modal>
   );
