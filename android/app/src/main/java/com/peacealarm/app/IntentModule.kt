@@ -67,11 +67,11 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         Thread {
             android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl thread started")
             try {
-                AlarmSoundManager.playUrl(reactApplicationContext, url) {
+                AlarmSoundManager.playUrlForeground(reactApplicationContext, url) {
                     android.util.Log.w("PeaceAlarm", "IntentModule.playAlarmUrl: onError callback, falling back")
                     AlarmSoundManager.playFallback(reactApplicationContext)
                 }
-                android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl: playUrl returned")
+                android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl: playUrlForeground returned")
             } catch (e: Exception) {
                 android.util.Log.e("PeaceAlarm", "IntentModule.playAlarmUrl thread exception: ${e.message}", e)
             }
@@ -145,6 +145,21 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     private fun clearAlarmPrefs() {
         reactApplicationContext.getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
             .edit().clear().apply()
+    }
+
+    @ReactMethod
+    fun setUserId(userId: String, promise: Promise) {
+        reactApplicationContext.getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putString("user_id", userId).apply()
+        promise.resolve(null)
+    }
+
+    @ReactMethod
+    fun setAlarmVolume(volume: Float, promise: Promise) {
+        AlarmSoundManager.alarmVolume = volume
+        reactApplicationContext.getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putFloat("alarm_volume", volume).apply()
+        promise.resolve(null)
     }
 
     @ReactMethod

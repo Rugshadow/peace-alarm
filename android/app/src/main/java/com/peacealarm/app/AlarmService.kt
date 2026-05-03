@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import org.json.JSONArray
 import java.net.URL
 
@@ -34,6 +35,21 @@ class AlarmService : Service() {
         Log.d("PeaceAlarm", "AlarmService: channelId=$channelId alarmId=$alarmId")
 
         PendingAlarmData.set(channelId, channelName, channelImageUrl)
+
+        // Load persisted volume into AlarmSoundManager before playing
+        AlarmSoundManager.alarmVolume = getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+            .getFloat("alarm_volume", 1.0f)
+
+        // Emit directly to JS bridge — most reliable path when app is already in foreground
+        try {
+            val reactContext = (applicationContext as? MainApplication)
+                ?.reactNativeHost?.reactInstanceManager?.currentReactContext
+            reactContext?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                ?.emit("PeaceAlarmFired", null)
+            Log.d("PeaceAlarm", "AlarmService: emitted PeaceAlarmFired directly to JS bridge")
+        } catch (e: Exception) {
+            Log.w("PeaceAlarm", "AlarmService: could not emit PeaceAlarmFired directly: ${e.message}")
+        }
 
         // SharedPreferences — persists even if JS hasn't loaded yet
         getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE).edit()
@@ -148,17 +164,86 @@ class AlarmService : Service() {
         return try {
             val supabaseUrl = "https://ozvuodmznvuvcuiayqth.supabase.co"
             val anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dnVvZG16bnZ1dmN1aWF5cXRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNTUwOTIsImV4cCI6MjA5MjczMTA5Mn0.noToTap-ZKNo6DFwe9we-u31efUs0F-E2RF9NPVwWxc"
-            val endpoint = "$supabaseUrl/rest/v1/audio_files?channel_id=eq.$channelId&order=created_at.desc&limit=1&select=audio_file"
-            val conn = URL(endpoint).openConnection() as java.net.HttpURLConnection
-            conn.setRequestProperty("apikey", anonKey)
-            conn.setRequestProperty("Authorization", "Bearer $anonKey")
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
-            val body = conn.inputStream.bufferedReader().readText()
-            conn.disconnect()
-            val arr = JSONArray(body)
-            if (arr.length() > 0) arr.getJSONObject(0).optString("audio_file").takeIf { it.isNotEmpty() }
-            else null
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            val now = sdf.format(java.util.Date())
+
+            // Determine listening_order for channel
+            val channelEndpoint = "$supabaseUrl/rest/v1/channels?channel_id=eq.$channelId&select=listening_order&limit=1"
+            val channelConn = URL(channelEndpoint).openConnection() as java.net.HttpURLConnection
+            channelConn.setRequestProperty("apikey", anonKey)
+            channelConn.setRequestProperty("Authorization", "Bearer $anonKey")
+            channelConn.connectTimeout = 5000
+            channelConn.readTimeout = 5000
+            val channelBody = channelConn.inputStream.bufferedReader().readText()
+            channelConn.disconnect()
+            val channelArr = JSONArray(channelBody)
+            val listeningOrder = if (channelArr.length() > 0)
+                channelArr.getJSONObject(0).optString("listening_order", "newest")
+            else "newest"
+
+            if (listeningOrder == "newest") {
+                // Latest released clip
+                val endpoint = "$supabaseUrl/rest/v1/audio_files?channel_id=eq.$channelId&or=(release_at.is.null,release_at.lte.$now)&order=created_at.desc&limit=1&select=audio_file"
+                val conn = URL(endpoint).openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("apikey", anonKey)
+                conn.setRequestProperty("Authorization", "Bearer $anonKey")
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                val body = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val arr = JSONArray(body)
+                if (arr.length() > 0) arr.getJSONObject(0).optString("audio_file").takeIf { it.isNotEmpty() }
+                else null
+            } else {
+                // Oldest unheard clip
+                val prefs = getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+                val userId = prefs.getString("user_id", null)
+
+                val heardIds = mutableSetOf<String>()
+                if (userId != null) {
+                    val userEndpoint = "$supabaseUrl/rest/v1/users?user_id=eq.$userId&select=heard_audio&limit=1"
+                    val userConn = URL(userEndpoint).openConnection() as java.net.HttpURLConnection
+                    userConn.setRequestProperty("apikey", anonKey)
+                    userConn.setRequestProperty("Authorization", "Bearer $anonKey")
+                    userConn.connectTimeout = 5000
+                    userConn.readTimeout = 5000
+                    val userBody = userConn.inputStream.bufferedReader().readText()
+                    userConn.disconnect()
+                    val userArr = JSONArray(userBody)
+                    if (userArr.length() > 0) {
+                        val heardArr = userArr.getJSONObject(0).optJSONArray("heard_audio")
+                        if (heardArr != null) {
+                            for (i in 0 until heardArr.length()) heardIds.add(heardArr.getString(i))
+                        }
+                    }
+                }
+
+                val allEndpoint = "$supabaseUrl/rest/v1/audio_files?channel_id=eq.$channelId&or=(release_at.is.null,release_at.lte.$now)&order=created_at.asc&select=audio_id,audio_file"
+                val allConn = URL(allEndpoint).openConnection() as java.net.HttpURLConnection
+                allConn.setRequestProperty("apikey", anonKey)
+                allConn.setRequestProperty("Authorization", "Bearer $anonKey")
+                allConn.connectTimeout = 5000
+                allConn.readTimeout = 5000
+                val allBody = allConn.inputStream.bufferedReader().readText()
+                allConn.disconnect()
+                val allArr = JSONArray(allBody)
+
+                // Find oldest unheard; fallback to newest if all heard
+                var target: String? = null
+                for (i in 0 until allArr.length()) {
+                    val obj = allArr.getJSONObject(i)
+                    val id = obj.optString("audio_id")
+                    if (!heardIds.contains(id)) {
+                        target = obj.optString("audio_file").takeIf { it.isNotEmpty() }
+                        break
+                    }
+                }
+                if (target == null && allArr.length() > 0) {
+                    target = allArr.getJSONObject(allArr.length() - 1).optString("audio_file").takeIf { it.isNotEmpty() }
+                }
+                target
+            }
         } catch (e: Exception) {
             Log.e("PeaceAlarm", "AlarmService: fetchLatestAudioUrl failed: ${e.message}")
             null

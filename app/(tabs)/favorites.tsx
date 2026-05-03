@@ -10,7 +10,7 @@ import ChannelSheet, { type Channel, type AudioClip } from '../../components/Cha
 import AlarmSheet from '../../components/AlarmSheet';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { useAlarms } from '../../hooks/useAlarms';
+import { useAlarmsContext } from '../../contexts/AlarmsContext';
 import { supabase } from '../../lib/supabase';
 
 type Tab = 'channels' | 'clips';
@@ -19,7 +19,7 @@ type FavoriteClip = AudioClip & { channelName: string; channelId: string; imageU
 export default function FavoritesScreen() {
   const { isLoggedIn, session } = useAuth();
   const { bg } = useTheme();
-  const { addAlarm } = useAlarms();
+  const { addAlarm } = useAlarmsContext();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('channels');
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -36,6 +36,7 @@ export default function FavoritesScreen() {
   }, [playerStatus.didJustFinish]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [clips, setClips] = useState<FavoriteClip[]>([]);
+  const [heardClips, setHeardClips] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -54,7 +55,7 @@ export default function FavoritesScreen() {
 
     const { data: userData } = await supabase
       .from('users')
-      .select('favorite_channels, favorite_samples')
+      .select('favorite_channels, favorite_samples, heard_audio')
       .eq('user_id', userId)
       .single();
 
@@ -64,10 +65,11 @@ export default function FavoritesScreen() {
     const favChannelIds: string[] = userData.favorite_channels ?? [];
     console.log('[favorites] favChannelIds:', favChannelIds);
     const favSampleIds: string[] = userData.favorite_samples ?? [];
+    setHeardClips((userData.heard_audio as string[]) ?? []);
 
     const [channelsResult, audioResult] = await Promise.all([
       favChannelIds.length > 0
-        ? supabase.from('channels').select('*').in('channel_id', favChannelIds)
+        ? supabase.from('channels').select('channel_id, name, genre, cover_photo, listening_order').in('channel_id', favChannelIds)
         : Promise.resolve({ data: [], error: null }),
       favChannelIds.length > 0
         ? supabase.from('audio_files').select('*').in('channel_id', favChannelIds).order('created_at', { ascending: false })
@@ -77,9 +79,10 @@ export default function FavoritesScreen() {
     const { data: favChannels } = channelsResult;
     const { data: audioFiles } = audioResult;
 
+    const now = new Date();
     const mappedChannels: Channel[] = (favChannels ?? []).map((ch) => {
       const uploads: AudioClip[] = (audioFiles ?? [])
-        .filter((f) => f.channel_id === ch.channel_id)
+        .filter((f) => f.channel_id === ch.channel_id && (!f.release_at || new Date(f.release_at) <= now))
         .map((f) => ({
           id: f.audio_id,
           title: f.title,
@@ -96,6 +99,7 @@ export default function FavoritesScreen() {
         bio: '',
         imageUrl: ch.cover_photo ?? undefined,
         uploads,
+        listeningOrder: (ch.listening_order as 'newest' | 'oldest') ?? 'newest',
       };
     });
 
@@ -106,7 +110,7 @@ export default function FavoritesScreen() {
         .select('*')
         .in('audio_id', favSampleIds);
 
-      mappedClips = (favAudio ?? []).map((f) => {
+      mappedClips = (favAudio ?? []).filter((f) => !f.release_at || new Date(f.release_at) <= now).map((f) => {
         const channel = mappedChannels.find((c) => c.id === f.channel_id);
         return {
           id: f.audio_id,
@@ -234,6 +238,7 @@ export default function FavoritesScreen() {
                 duration={item.duration}
                 isPlaying={playingId === item.id}
                 isFavorited
+                isHeard={heardClips.includes(item.id)}
                 imageUrl={item.imageUrl}
                 onPress={() => {
                   if (playingId === item.id) {

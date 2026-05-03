@@ -25,6 +25,7 @@ export type Channel = {
   bio: string;
   uploads: AudioClip[];
   imageUrl?: string;
+  listeningOrder?: 'newest' | 'oldest';
 };
 
 export type AudioClip = {
@@ -33,7 +34,6 @@ export type AudioClip = {
   date: string;
   duration: number;
   audioUrl: string;
-  isScheduled?: boolean;
   imageUrl?: string;
 };
 
@@ -50,19 +50,42 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   const { playingId, play, stop } = useAudioPlayer();
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteClips, setFavoriteClips] = useState<string[]>([]);
+  const [heardClips, setHeardClips] = useState<string[]>([]);
+  const [userOrder, setUserOrder] = useState<'newest' | 'oldest'>('newest');
 
   useEffect(() => {
-    if (isLoggedIn && session && channel) checkFavoriteStatus();
-  }, [channel, isLoggedIn, session]);
+    if (visible && channel) {
+      setUserOrder(channel.listeningOrder ?? 'newest');
+      if (isLoggedIn && session) checkFavoriteStatus();
+    }
+  }, [visible, channel, isLoggedIn, session]);
 
   const checkFavoriteStatus = async () => {
     const { data } = await supabase
       .from('users')
-      .select('favorite_channels, favorite_samples')
+      .select('favorite_channels, favorite_samples, heard_audio, channel_listening_overrides')
       .eq('user_id', session!.user.id)
       .single();
     setIsFavorited((data?.favorite_channels ?? []).includes(channel!.id));
     setFavoriteClips(data?.favorite_samples ?? []);
+    setHeardClips((data?.heard_audio as string[]) ?? []);
+    const overrides = (data?.channel_listening_overrides as Record<string, 'newest' | 'oldest'>) ?? {};
+    setUserOrder(overrides[channel!.id] ?? channel!.listeningOrder ?? 'newest');
+  };
+
+  const handleUserOrderChange = async (newOrder: 'newest' | 'oldest') => {
+    setUserOrder(newOrder);
+    if (!session || !channel) return;
+    const { data } = await supabase
+      .from('users')
+      .select('channel_listening_overrides')
+      .eq('user_id', session.user.id)
+      .single();
+    const current = (data?.channel_listening_overrides as Record<string, string>) ?? {};
+    await supabase
+      .from('users')
+      .update({ channel_listening_overrides: { ...current, [channel.id]: newOrder } } as any)
+      .eq('user_id', session.user.id);
   };
 
   const toggleFavorite = async () => {
@@ -166,19 +189,49 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
               duration={clip.duration}
               isPlaying={playingId === clip.id}
               isFavorited={favoriteClips.includes(clip.id)}
-              isScheduled={clip.isScheduled}
+              isHeard={isLoggedIn ? heardClips.includes(clip.id) : undefined}
               imageUrl={clip.imageUrl}
               onPress={() => play(clip.id, clip.audioUrl)}
               onFavorite={() => toggleFavoriteClip(clip.id)}
             />
           ))}
+
+          {isLoggedIn && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 8 }}>
+              <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 1, marginBottom: 12 }}>
+                YOUR LISTENING ORDER
+              </Text>
+              <View style={{ flexDirection: 'row', backgroundColor: '#F5F5F0', borderRadius: 16, padding: 4 }}>
+                {(['newest', 'oldest'] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => handleUserOrderChange(mode)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      backgroundColor: userOrder === mode ? Colors.primary : 'transparent',
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: userOrder === mode ? Colors.textPrimary : Colors.textSecondary,
+                    }}>
+                      {mode === 'newest' ? 'Newest content always' : 'Play from beginning'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </ScrollView>
 
-        <View style={{ backgroundColor: Colors.primary }}>
+        <View style={{ backgroundColor: Colors.primary, height: 56 }}>
           <TouchableOpacity
             onPress={handleClose}
-            className="flex-row items-center justify-center gap-1 py-4"
-            style={{ paddingBottom: 24 }}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}
           >
             <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
             <Text className="font-medium text-[15px] text-text-primary">Back</Text>

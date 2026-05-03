@@ -14,7 +14,8 @@ type Props = {
   duration: number;
   isPlaying: boolean;
   isFavorited?: boolean;
-  isScheduled?: boolean;
+  isHeard?: boolean;
+  releaseDate?: Date;
   imageUrl?: string;
   onPress: () => void;
   onFavorite?: () => void;
@@ -27,6 +28,11 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function formatReleaseDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 export default function AudioListRow({
   id,
   title,
@@ -36,21 +42,19 @@ export default function AudioListRow({
   duration,
   isPlaying,
   isFavorited,
-  isScheduled,
+  isHeard,
+  releaseDate,
   imageUrl,
   onPress,
   onFavorite,
   onDelete,
 }: Props) {
   const { bg, surface, text, textSecondary } = useTheme();
+  const isScheduled = !!releaseDate && releaseDate > new Date();
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{ backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: surface }} className="flex-row items-center py-3 px-4">
       <View style={{ width: 50, height: 50 }} className="items-center justify-center mr-3">
-        {isScheduled ? (
-          <View style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: surface }} className="items-center justify-center">
-            <Ionicons name="moon" size={24} color={textSecondary} />
-          </View>
-        ) : imageUrl ? (
+        {imageUrl ? (
           <Image source={{ uri: imageUrl }} style={{ width: 50, height: 50, borderRadius: 0 }} resizeMode="cover" />
         ) : (
           <ChannelAvatar id={channelId} name={channelName} size="list" />
@@ -63,20 +67,23 @@ export default function AudioListRow({
       </View>
 
       <View className="flex-1">
-        <View className="flex-row items-center gap-2">
-          <Text style={{ color: text }} className="font-medium text-[15px]" numberOfLines={1}>
-            {title}
-          </Text>
-          {isScheduled && (
-            <View style={{ backgroundColor: surface }} className="rounded-full px-2 py-0.5">
-              <Text style={{ color: textSecondary }} className="text-[11px]">Scheduled</Text>
-            </View>
-          )}
-        </View>
-        <Text style={{ color: textSecondary }} className="text-[13px] mt-0.5">
-          {date} · {formatDuration(duration)}
+        <Text style={{ color: text }} className="font-medium text-[15px]" numberOfLines={1}>
+          {title}
         </Text>
+        {isScheduled ? (
+          <Text style={{ color: '#E53935', fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+            Set to release: {formatReleaseDate(releaseDate!)}
+          </Text>
+        ) : (
+          <Text style={{ color: textSecondary }} className="text-[13px] mt-0.5">
+            {date} · {formatDuration(duration)}
+          </Text>
+        )}
       </View>
+
+      {onFavorite && isHeard === false && (
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary, marginRight: 4 }} />
+      )}
 
       {onFavorite && (
         <TouchableOpacity onPress={onFavorite} className="px-2">

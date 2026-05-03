@@ -12,7 +12,7 @@ export function useChannels() {
 
   const load = async () => {
     const [{ data: channelRows }, { data: audioFiles }, { data: users }] = await Promise.all([
-      supabase.from('channels').select('channel_id, name, genre, cover_photo, owner_id'),
+      supabase.from('channels').select('channel_id, name, genre, cover_photo, owner_id, listening_order'),
       supabase.from('audio_files').select('*').order('created_at', { ascending: false }),
       supabase.from('users').select('user_id, set_alarms'),
     ]);
@@ -44,8 +44,9 @@ export function useChannels() {
     }
 
     const mapped: Channel[] = channelRows.map((ch: any) => {
+      const now = new Date();
       const uploads: AudioClip[] = files
-        .filter((f: any) => f.channel_id === ch.channel_id)
+        .filter((f: any) => f.channel_id === ch.channel_id && (!f.release_at || new Date(f.release_at) <= now))
         .map((f: any) => ({
           id: f.audio_id,
           title: f.title,
@@ -63,6 +64,7 @@ export function useChannels() {
         bio: '',
         imageUrl: ch.cover_photo ?? undefined,
         uploads,
+        listeningOrder: (ch.listening_order as 'newest' | 'oldest') ?? 'newest',
       };
     });
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { decode } from 'base64-arraybuffer';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../hooks/useTheme';
 
 type ListeningOrder = 'newest' | 'oldest';
 
@@ -38,8 +39,13 @@ export default function ChannelSettingsSheet({
   onOrderChanged,
 }: Props) {
   const { session } = useAuth();
+  const { bg, surface, text, textSecondary } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [order, setOrder] = useState<ListeningOrder>(listeningOrder);
+
+  useEffect(() => {
+    if (visible) setOrder(listeningOrder);
+  }, [visible, channelId]);
 
   const handleOrderChange = async (newOrder: ListeningOrder) => {
     setOrder(newOrder);
@@ -109,7 +115,7 @@ export default function ChannelSettingsSheet({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView className="flex-1 bg-white" edges={['left', 'right']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['left', 'right']}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
           <View className="px-6 pt-2 pb-3">
             <Text className="text-[17px] font-semibold text-text-primary text-center">
@@ -157,10 +163,10 @@ export default function ChannelSettingsSheet({
           </TouchableOpacity>
 
           {/* Listening order */}
-          <Text className="text-[12px] font-semibold text-text-secondary tracking-wider mt-8 mb-3">
-            LISTENING ORDER
+          <Text style={{ color: textSecondary }} className="text-[12px] font-semibold tracking-wider mt-8 mb-3">
+            DEFAULT LISTENING ORDER
           </Text>
-          <View className="bg-surface rounded-2xl p-1 flex-row">
+          <View style={{ backgroundColor: surface }} className="rounded-2xl p-1 flex-row">
             {(['newest', 'oldest'] as ListeningOrder[]).map((mode) => (
               <TouchableOpacity
                 key={mode}
@@ -170,22 +176,22 @@ export default function ChannelSettingsSheet({
               >
                 <Text
                   className="font-semibold text-[14px]"
-                  style={{ color: order === mode ? Colors.textPrimary : Colors.textSecondary }}
+                  style={{ color: order === mode ? Colors.textPrimary : textSecondary }}
                 >
-                  {mode === 'newest' ? 'Newest First' : 'Oldest First'}
+                  {mode === 'newest' ? 'Newest content always' : 'Play from beginning'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-          <Text className="text-text-secondary text-[13px] mt-3 leading-5">
-            Choose whether daily listeners receive your newest content first (better for news, comedy), or start from the beginning (better for stories, music).
+          <Text style={{ color: textSecondary }} className="text-[13px] mt-3 leading-5">
+            Choose whether daily listeners always receive your newest content by default (good for news and current events), or if they start from your oldest content first (good for storytelling and educational content). You may determine the dafault setting for the channel, but listeners may adjust this to their own listening needs.
           </Text>
         </View>
 
-        <View style={{ backgroundColor: Colors.primary, paddingBottom: 24 }}>
+        <View style={{ backgroundColor: Colors.primary, height: 56 }}>
           <TouchableOpacity
             onPress={onClose}
-            className="flex-row items-center justify-center gap-1 py-4"
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}
           >
             <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
             <Text className="font-medium text-[15px] text-text-primary">Back</Text>

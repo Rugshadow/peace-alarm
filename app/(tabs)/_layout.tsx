@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, Image, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,24 @@ function Header({ routeName }: { routeName: string }) {
   const { isLoggedIn, username } = useAuth();
   const router = useRouter();
   const [showAccount, setShowAccount] = useState(false);
+  const ringAnim = useRef(new Animated.Value(0)).current;
+
+  const ringLogo = () => {
+    ringAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(ringAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(ringAnim, { toValue: -1, duration: 80, useNativeDriver: true }),
+      Animated.timing(ringAnim, { toValue: 0.7, duration: 70, useNativeDriver: true }),
+      Animated.timing(ringAnim, { toValue: -0.7, duration: 70, useNativeDriver: true }),
+      Animated.timing(ringAnim, { toValue: 0.4, duration: 60, useNativeDriver: true }),
+      Animated.timing(ringAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const rotate = ringAnim.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-18deg', '0deg', '18deg'],
+  });
 
   const titles: Record<string, string> = {
     browse: 'Browse Alarm Feeds',
@@ -22,19 +40,19 @@ function Header({ routeName }: { routeName: string }) {
 
   return (
     <>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#3a3a3a' }}>
         <View className="flex-row items-center px-4 pb-2" style={{ height: 44 }}>
-          <View style={{ width: 40 }}>
-            <Image
-              source={require('../../assets/icon.png')}
-              style={{ width: 36, height: 36, borderRadius: 8 }}
+          <TouchableOpacity onPress={ringLogo} activeOpacity={1} style={{ width: 40 }}>
+            <Animated.Image
+              source={require('../../assets/Peace Alarm Icon dark.png')}
+              style={{ width: 36, height: 36, borderRadius: 8, transform: [{ rotate }] }}
               resizeMode="contain"
             />
-          </View>
+          </TouchableOpacity>
 
           <Text
-            className="text-[17px] font-semibold text-text-primary text-center"
-            style={{ flex: 1 }}
+            className="text-[17px] font-semibold text-center"
+            style={{ flex: 1, color: '#ffffff' }}
             numberOfLines={1}
           >
             {title}
@@ -42,7 +60,7 @@ function Header({ routeName }: { routeName: string }) {
 
           {isLoggedIn ? (
             <TouchableOpacity onPress={() => setShowAccount(true)} style={{ width: 40, alignItems: 'flex-end' }}>
-              <Ionicons name="person-circle" size={34} color="white" />
+              <Ionicons name="person-circle" size={34} color={Colors.primary} />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -104,8 +122,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="uploads"
         options={{
-          title: 'Uploads',
-          tabBarIcon: ({ color }) => <Ionicons name="cloud-upload" size={22} color={color} />,
+          title: 'Create',
+          tabBarIcon: ({ color }) => <Ionicons name="mic" size={22} color={color} />,
         }}
       />
     </Tabs>

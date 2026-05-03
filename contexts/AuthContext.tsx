@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { stopAllAudio } from '../lib/audioRegistry';
 import type { Session } from '@supabase/supabase-js';
+
+const { IntentData } = NativeModules;
+const VOLUME_KEY = 'alarmVolume';
 
 type TimeFormat = 'standard' | 'military';
 type ColorScheme = 'light' | 'dark';
@@ -15,6 +20,8 @@ type AuthContextType = {
   setTimeFormat: (fmt: TimeFormat) => void;
   colorScheme: ColorScheme;
   setColorScheme: (scheme: ColorScheme) => void;
+  alarmVolume: number;
+  setAlarmVolume: (vol: number) => void;
   signOut: () => void;
 };
 
@@ -27,6 +34,8 @@ const AuthContext = createContext<AuthContextType>({
   setTimeFormat: () => {},
   colorScheme: 'light',
   setColorScheme: () => {},
+  alarmVolume: 1,
+  setAlarmVolume: () => {},
   signOut: () => {},
 });
 
@@ -36,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
   const [timeFormatState, setTimeFormatState] = useState<TimeFormat>('standard');
   const [colorSchemeState, setColorSchemeState] = useState<ColorScheme>('light');
+  const [alarmVolumeState, setAlarmVolumeState] = useState<number>(1);
 
   const fetchUserPrefs = async (userId: string, sess?: any) => {
     const { data } = await supabase
@@ -71,17 +81,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const setAlarmVolume = (vol: number) => {
+    setAlarmVolumeState(vol);
+    AsyncStorage.setItem(VOLUME_KEY, String(vol));
+    try { IntentData?.setAlarmVolume?.(vol); } catch {}
+  };
+
+  useEffect(() => {
+    AsyncStorage.getItem(VOLUME_KEY).then((v) => {
+      if (v !== null) {
+        const parsed = parseFloat(v);
+        if (!isNaN(parsed)) {
+          setAlarmVolumeState(parsed);
+          try { IntentData?.setAlarmVolume?.(parsed); } catch {}
+        }
+      }
+    });
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) fetchUserPrefs(session.user.id, session);
+      if (session) {
+        fetchUserPrefs(session.user.id, session);
+        try { IntentData?.setUserId?.(session.user.id); } catch {}
+      }
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchUserPrefs(session.user.id, session);
-      else {
+      if (session) {
+        fetchUserPrefs(session.user.id, session);
+        try { IntentData?.setUserId?.(session.user.id); } catch {}
+      } else {
         setUsername(null);
         setTimeFormatState('standard');
         setColorSchemeState('light');
@@ -102,6 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setTimeFormat,
       colorScheme: colorSchemeState,
       setColorScheme,
+      alarmVolume: alarmVolumeState,
+      setAlarmVolume,
       signOut: () => { stopAllAudio(); supabase.auth.signOut(); },
     }}>
       {children}
