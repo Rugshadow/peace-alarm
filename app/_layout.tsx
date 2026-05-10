@@ -5,10 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import notifee, { EventType, AndroidNotificationSetting } from '@notifee/react-native';
 import { NativeModules, DeviceEventEmitter, AppState } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+
+SplashScreen.preventAutoHideAsync();
 
 const { IntentData } = NativeModules;
 import * as NavigationBar from 'expo-navigation-bar';
 import { AuthProvider } from '../contexts/AuthContext';
+import { AlarmsProvider, useAlarmsContext } from '../contexts/AlarmsContext';
 import { setupNotificationChannel } from '../lib/alarmScheduler';
 import AlarmRingingModal from '../components/AlarmRingingModal';
 
@@ -25,6 +29,7 @@ function extractAlarm(data: Record<string, any> | undefined): RingingAlarm | nul
 
 function AppBootstrap({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { deactivateByChannelId } = useAlarmsContext();
   const [ringingAlarm, setRingingAlarm] = useState<RingingAlarm | null>(null);
   const initialized = useRef(false);
 
@@ -36,32 +41,34 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
       try { await NavigationBar.setVisibilityAsync('hidden'); } catch {}
       await setupNotificationChannel();
 
-      // Request notification + exact alarm permissions
-      await notifee.requestPermission();
-      const settings = await notifee.getNotificationSettings();
-      if (settings.android?.alarm !== AndroidNotificationSetting.ENABLED) {
-        await notifee.openAlarmPermissionSettings();
-      }
-
-      // Request battery optimization exclusion (critical for alarm reliability on Samsung)
-      if (IntentData?.isIgnoringBatteryOptimizations) {
-        const ignoring = await IntentData.isIgnoringBatteryOptimizations();
-        console.log('[layout] isIgnoringBatteryOptimizations:', ignoring);
-        if (!ignoring) await IntentData.requestIgnoreBatteryOptimizations().catch(() => {});
-      }
-
-      // Request USE_FULL_SCREEN_INTENT permission (Android 14+)
-      if (IntentData?.canUseFullScreenIntent) {
-        const canUse = await IntentData.canUseFullScreenIntent();
-        console.log('[layout] canUseFullScreenIntent:', canUse);
-        if (!canUse) await IntentData.openFullScreenIntentSettings().catch(() => {});
-      }
-
       // Handle alarm that opened the app via native AlarmReceiver
       if (IntentData) {
         const alarmData = await IntentData.getAlarmData();
         console.log('[layout] getAlarmData on init:', JSON.stringify(alarmData));
         if (alarmData?.channelId) setRingingAlarm(alarmData as RingingAlarm);
+      }
+
+      // Hide splash — app is ready
+      SplashScreen.hideAsync().catch(() => {});
+
+      // Permission checks fire-and-forget after splash is gone
+      notifee.requestPermission();
+      notifee.getNotificationSettings().then(settings => {
+        if (settings.android?.alarm !== AndroidNotificationSetting.ENABLED) {
+          notifee.openAlarmPermissionSettings();
+        }
+      });
+      if (IntentData?.isIgnoringBatteryOptimizations) {
+        IntentData.isIgnoringBatteryOptimizations().then((ignoring: boolean) => {
+          console.log('[layout] isIgnoringBatteryOptimizations:', ignoring);
+          if (!ignoring) IntentData.requestIgnoreBatteryOptimizations().catch(() => {});
+        });
+      }
+      if (IntentData?.canUseFullScreenIntent) {
+        IntentData.canUseFullScreenIntent().then((canUse: boolean) => {
+          console.log('[layout] canUseFullScreenIntent:', canUse);
+          if (!canUse) IntentData.openFullScreenIntentSettings().catch(() => {});
+        });
       }
     })();
 
@@ -81,7 +88,7 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
         console.log('[layout] getAlarmData on PeaceAlarmFired:', JSON.stringify(alarmData));
         if (alarmData?.channelId) {
           console.log('[layout] setting ringing alarm from PeaceAlarmFired');
-          setRingingAlarm(alarmData as RingingAlarm);
+          setRingingAlarm(prev => prev?.channelId === alarmData.channelId ? prev : alarmData as RingingAlarm);
         }
       }
     });
@@ -94,7 +101,7 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
         console.log('[layout] AppState active getAlarmData:', JSON.stringify(alarmData));
         if (alarmData?.channelId) {
           console.log('[layout] alarm detected via AppState active:', alarmData.channelId);
-          setRingingAlarm(alarmData as RingingAlarm);
+          setRingingAlarm(prev => prev?.channelId === alarmData.channelId ? prev : alarmData as RingingAlarm);
         }
       }
     });
@@ -110,7 +117,10 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
         channelId={ringingAlarm?.channelId ?? ''}
         channelName={ringingAlarm?.channelName ?? ''}
         channelImageUrl={ringingAlarm?.channelImageUrl}
-        onDismiss={() => setRingingAlarm(null)}
+        onDismiss={() => {
+          if (ringingAlarm) deactivateByChannelId(ringingAlarm.channelId);
+          setRingingAlarm(null);
+        }}
       />
     </>
   );
@@ -120,16 +130,18 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <AppBootstrap>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="auth/login" />
-            <Stack.Screen name="auth/login-email" />
-            <Stack.Screen name="auth/signup" />
-            <Stack.Screen name="auth/callback" />
-          </Stack>
-        </AppBootstrap>
+        <AlarmsProvider>
+          <AppBootstrap>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth/login" />
+              <Stack.Screen name="auth/login-email" />
+              <Stack.Screen name="auth/signup" />
+              <Stack.Screen name="auth/callback" />
+            </Stack>
+          </AppBootstrap>
+        </AlarmsProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Alert } from 'react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { scheduleAlarmNotifications, cancelAlarmNotifications } from '../lib/alarmScheduler';
@@ -65,22 +64,7 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeAlarm = (id: string) => {
-    Alert.alert('Remove Alarm', 'Are you sure you want to remove this alarm?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          const alarm = alarms.find((a) => a.id === id);
-          if (alarm?.notificationIds?.length) {
-            await cancelAlarmNotifications(alarm.notificationIds);
-          }
-          const updated = alarms.filter((a) => a.id !== id);
-          setAlarms(updated);
-          persistAlarms(updated);
-        },
-      },
-    ]);
+    removeAlarmDirect(id);
   };
 
   const removeAlarmDirect = async (id: string) => {

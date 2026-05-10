@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import AppAlert from './AppAlert';
+import { useAppAlert } from '../hooks/useAppAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -40,6 +41,7 @@ export default function ChannelSettingsSheet({
 }: Props) {
   const { session } = useAuth();
   const { bg, surface, text, textSecondary } = useTheme();
+  const { showAlert, alertProps } = useAppAlert();
   const [uploading, setUploading] = useState(false);
   const [order, setOrder] = useState<ListeningOrder>(listeningOrder);
 
@@ -50,10 +52,12 @@ export default function ChannelSettingsSheet({
   const handleOrderChange = async (newOrder: ListeningOrder) => {
     setOrder(newOrder);
     onOrderChanged(newOrder);
-    await supabase
+    const { error } = await supabase
       .from('channels')
       .update({ listening_order: newOrder } as any)
       .eq('channel_id', channelId);
+    if (error) console.error('[ChannelSettingsSheet] listening_order update failed:', error.message, error.code);
+    else console.log('[ChannelSettingsSheet] listening_order updated to:', newOrder);
   };
 
   const pickAndUploadCover = async () => {
@@ -91,7 +95,7 @@ export default function ChannelSettingsSheet({
         .upload(fileName, arrayBuffer, { contentType: `image/${ext}` });
 
       if (uploadError) {
-        Alert.alert('Upload failed', uploadError.message);
+        showAlert('Upload failed', uploadError.message);
         return;
       }
 
@@ -105,9 +109,9 @@ export default function ChannelSettingsSheet({
         .eq('channel_id', channelId);
 
       onCoverUpdated(newUrl);
-      Alert.alert('Done', 'Cover photo updated.');
+      showAlert('Done', 'Cover photo updated.');
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Something went wrong');
+      showAlert('Error', e.message ?? 'Something went wrong');
     } finally {
       setUploading(false);
     }
@@ -115,6 +119,7 @@ export default function ChannelSettingsSheet({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <AppAlert {...alertProps} />
       <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['left', 'right']}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
           <View className="px-6 pt-2 pb-3">

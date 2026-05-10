@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, Alert, Pressable, PanResponder } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, Pressable, PanResponder } from 'react-native';
+import AppAlert from './AppAlert';
+import { useAppAlert } from '../hooks/useAppAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -11,17 +13,28 @@ import {
   RecordingPresets,
 } from 'expo-audio';
 import { Colors } from '../constants/colors';
+import { useTheme } from '../hooks/useTheme';
 import FinalizeAudioSheet from './FinalizeAudioSheet';
 
 type RecordState = 'idle' | 'recording' | 'stopped' | 'playing';
 
+type EditAudio = {
+  url: string;
+  duration: number;
+  title: string;
+  thumbnailUri?: string;
+  releaseDate?: Date;
+};
+
 type Props = {
   visible: boolean;
   onClose: () => void;
+  scheduledDates?: { date: Date; title: string }[];
+  editAudio?: EditAudio;
   onSave: (data: { uri: string; title: string; thumbnailUri?: string; thumbnailBase64?: string; releaseDate?: Date; durationSeconds: number }) => void;
 };
 
-const MAX_SECONDS = 180;
+const MAX_SECONDS = 300;
 const NUM_BARS = 60; // one bar per 2 seconds over 2 minutes
 
 const RECORDING_OPTIONS = {
@@ -29,7 +42,37 @@ const RECORDING_OPTIONS = {
   isMeteringEnabled: true,
 };
 
-export default function RecordSheet({ visible, onClose, onSave }: Props) {
+const BAR_COUNT_WAVEFORM = 40;
+
+async function fetchWaveformSamples(url: string): Promise<number[]> {
+  try {
+    const response = await fetch(url, { headers: { Range: 'bytes=4096-204800' } });
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const step = Math.floor(bytes.length / NUM_BARS);
+    const raw = Array.from({ length: NUM_BARS }, (_, i) => {
+      const start = i * step;
+      const end = Math.min(start + step, bytes.length);
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += bytes[j];
+      return sum / (end - start);
+    });
+    const mean = raw.reduce((a, b) => a + b, 0) / raw.length;
+    const devs = raw.map(v => Math.abs(v - mean));
+    const smoothed = devs.map((v, i) => {
+      const w = devs.slice(Math.max(0, i - 1), i + 2);
+      return w.reduce((a, b) => a + b, 0) / w.length;
+    });
+    const max = Math.max(...smoothed, 1);
+    return smoothed.map(v => Math.max(0.04, Math.min(1, 0.08 + 0.92 * (v / max))));
+  } catch {
+    return Array.from({ length: NUM_BARS }, (_, i) => 0.15 + 0.2 * Math.abs(Math.sin(i * 0.4)));
+  }
+}
+
+export default function RecordSheet({ visible, onClose, onSave, scheduledDates, editAudio }: Props) {
+  const { bg, surface, text, textSecondary } = useTheme();
+  const { showAlert, alertProps } = useAppAlert();
   const [state, setState] = useState<RecordState>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
@@ -41,6 +84,8 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
   const [playheadRatio, setPlayheadRatio] = useState(0);
   const isDraggingRef = useRef(false);
   const [finalizeVisible, setFinalizeVisible] = useState(false);
+  const hasNewRecordingRef = useRef(false);
+  const [hasNewRecording, setHasNewRecording] = useState(false);
 
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 100);
@@ -48,6 +93,15 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
   const playerStatus = useAudioPlayerStatus(player);
 
   useEffect(() => {
+    if (visible && editAudio) {
+      hasNewRecordingRef.current = false;
+      setHasNewRecording(false);
+      setRecordingUri(editAudio.url);
+      setElapsed(editAudio.duration);
+      setState('stopped');
+      setPlayheadRatio(0);
+      fetchWaveformSamples(editAudio.url).then(setSamples);
+    }
     if (!visible) doClose();
   }, [visible]);
 
@@ -69,9 +123,16 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
     return () => subscription.remove();
   }, [player]);
 
+  const effectiveDuration = (state === 'recording' || hasNewRecording)
+    ? (elapsed > 0 ? elapsed : MAX_SECONDS)
+    : ((playerStatus as any).duration > 0 ? (playerStatus as any).duration : MAX_SECONDS);
+
   useEffect(() => {
     if (!isDraggingRef.current && state === 'playing') {
-      const ratio = Math.min(1, playerStatus.currentTime / MAX_SECONDS);
+      const dur = hasNewRecording
+        ? (elapsed > 0 ? elapsed : MAX_SECONDS)
+        : ((playerStatus as any).duration > 0 ? (playerStatus as any).duration : MAX_SECONDS);
+      const ratio = Math.min(1, playerStatus.currentTime / dur);
       setPlayheadRatio(ratio);
     }
   }, [playerStatus.currentTime]);
@@ -85,11 +146,14 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
   const startRecording = async () => {
     const { granted } = await requestRecordingPermissionsAsync();
     if (!granted) {
-      Alert.alert('Permission required', 'Microphone access is needed to record.');
+      showAlert('Permission required', 'Microphone access is needed to record.');
       return;
     }
+    hasNewRecordingRef.current = true;
+    setHasNewRecording(true);
     setSamples([]);
     lastSampleTimeRef.current = 0;
+    try { await recorder.stop(); } catch {}
     await recorder.prepareToRecordAsync();
     recorder.record();
     setState('recording');
@@ -107,6 +171,17 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
     await recorder.stop();
     const uri = recorder.uri;
     setRecordingUri(uri ?? null);
+    setSamples(prev => {
+      if (prev.length === 0) return prev;
+      if (prev.length >= NUM_BARS) return prev.slice(0, NUM_BARS);
+      return Array.from({ length: NUM_BARS }, (_, i) => {
+        const srcIdx = (i / (NUM_BARS - 1)) * (prev.length - 1);
+        const lo = Math.floor(srcIdx);
+        const hi = Math.min(lo + 1, prev.length - 1);
+        const t = srcIdx - lo;
+        return prev[lo] * (1 - t) + prev[hi] * t;
+      });
+    });
     setState('stopped');
   };
 
@@ -130,15 +205,18 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
     setSamples([]);
     setPlayheadRatio(0);
     setFinalizeVisible(false);
+    hasNewRecordingRef.current = false;
+    setHasNewRecording(false);
     lastSampleTimeRef.current = 0;
     onClose();
   };
 
   const handleClose = () => {
-    if (elapsed > 0) {
-      Alert.alert(
-        'Delete Recording',
-        'Are you sure you want to delete this recording?',
+    if (hasNewRecordingRef.current) {
+      const isEdit = !!editAudio;
+      showAlert(
+        isEdit ? 'Cancel Editing' : 'Delete Recording',
+        isEdit ? 'Are you sure you want to cancel your changes?' : 'Are you sure you want to delete this recording?',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete', style: 'destructive', onPress: doClose },
@@ -164,7 +242,7 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
     onPanResponderRelease: (e) => {
       const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / boxWidthRef.current));
       setPlayheadRatio(ratio);
-      player.seekTo(ratio * MAX_SECONDS);
+      player.seekTo(ratio * effectiveDuration);
       isDraggingRef.current = false;
     },
   });
@@ -178,7 +256,7 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
         style={{
           flex: 1,
           height,
-          backgroundColor: isRecorded ? Colors.primary : '#E5E7EB',
+          backgroundColor: isRecorded ? Colors.primary : surface,
           borderRadius: 2,
           marginHorizontal: 1,
           alignSelf: 'center',
@@ -189,7 +267,8 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView className="flex-1 bg-white" edges={['left', 'right']}>
+      <AppAlert {...alertProps} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['left', 'right']}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
           <View className="px-6 pt-2 pb-3">
             <Text className="text-[17px] font-semibold text-text-primary text-center">Record Alarm</Text>
@@ -197,26 +276,25 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
         </SafeAreaView>
 
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-[13px] text-text-secondary text-center mb-6">
-            Alarms must be between 1 and 3 minutes in length.
+          <Text style={{ fontSize: 13, color: textSecondary, textAlign: 'center', marginBottom: 24 }}>
+            Alarms must be between 1 and 5 minutes in length.
           </Text>
           <View className="flex-row items-end mb-8 gap-1">
-            <Text className="text-[40px] font-bold text-text-primary">
-              {formatTime(state === 'recording' ? elapsed : Math.round(playheadRatio * MAX_SECONDS))}
+            <Text style={{ fontSize: 40, fontWeight: 'bold', color: text }}>
+              {formatTime(state === 'recording' ? elapsed : Math.round(playheadRatio * effectiveDuration))}
             </Text>
-            <Text className="text-[24px] font-semibold text-text-secondary mb-1"> / </Text>
-            <Text className="text-[40px] font-bold text-text-secondary">
-              {formatTime(elapsed)}
+            <Text style={{ fontSize: 24, fontWeight: '600', color: textSecondary, marginBottom: 4 }}> / </Text>
+            <Text style={{ fontSize: 40, fontWeight: 'bold', color: textSecondary }}>
+              {formatTime(state === 'recording' ? elapsed : Math.round(effectiveDuration))}
             </Text>
-            <Text className="text-[24px] font-semibold text-text-secondary mb-1"> / </Text>
-            <Text className="text-[40px] font-bold text-text-secondary">
+            <Text style={{ fontSize: 24, fontWeight: '600', color: textSecondary, marginBottom: 4 }}> / </Text>
+            <Text style={{ fontSize: 40, fontWeight: 'bold', color: textSecondary }}>
               {formatTime(MAX_SECONDS)}
             </Text>
           </View>
 
           <View
-            className="w-full bg-surface flex-row items-center"
-            style={{ height: 120, position: 'relative' }}
+            style={{ height: 120, position: 'relative', width: '100%', backgroundColor: surface, flexDirection: 'row', alignItems: 'center' }}
             onLayout={(e) => { boxWidthRef.current = e.nativeEvent.layout.width; setBoxWidth(e.nativeEvent.layout.width); }}
             {...panResponder.panHandlers}
           >
@@ -232,15 +310,15 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
                   top: 0,
                   bottom: 0,
                   width: 1,
-                  backgroundColor: Colors.textPrimary,
+                  backgroundColor: text,
                 }}
               />
             )}
             <View
               pointerEvents="none"
-              style={{ position: 'absolute', left: boxWidth / 3, top: '50%', transform: [{ translateX: -6 }, { translateY: -6 }] }}
+              style={{ position: 'absolute', left: boxWidth * (60 / (state === 'recording' ? MAX_SECONDS : effectiveDuration)), top: '50%', transform: [{ translateX: -6 }, { translateY: -6 }] }}
             >
-              <Text style={{ fontSize: 12, color: Colors.textSecondary, fontWeight: 'bold', lineHeight: 12 }}>✕</Text>
+              <Text style={{ fontSize: 12, color: textSecondary, fontWeight: 'bold', lineHeight: 12 }}>✕</Text>
             </View>
           </View>
 
@@ -257,36 +335,33 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
             {/* Play / Pause */}
             <TouchableOpacity
               onPress={state === 'stopped' || state === 'playing' ? togglePlayback : undefined}
-              className="flex-1 items-center justify-center rounded-2xl bg-surface"
-              style={{ aspectRatio: 1, opacity: state === 'stopped' || state === 'playing' ? 1 : 0.3 }}
+                style={{ aspectRatio: 1, opacity: state === 'stopped' || state === 'playing' ? 1 : 0.3, backgroundColor: surface, flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 16 }}
             >
-              <Ionicons name={state === 'playing' ? 'pause' : 'play'} size={32} color={Colors.textPrimary} />
+              <Ionicons name={state === 'playing' ? 'pause' : 'play'} size={32} color={text} />
             </TouchableOpacity>
 
             {/* Return to start */}
             <TouchableOpacity
               onPress={state === 'stopped' || state === 'playing' ? () => { player.seekTo(0); setPlayheadRatio(0); if (state === 'playing') { player.pause(); setState('stopped'); } } : undefined}
-              className="flex-1 items-center justify-center rounded-2xl bg-surface"
-              style={{ aspectRatio: 1, opacity: state === 'stopped' || state === 'playing' ? 1 : 0.3 }}
+              style={{ aspectRatio: 1, opacity: state === 'stopped' || state === 'playing' ? 1 : 0.3, backgroundColor: surface, flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 16 }}
             >
-              <Ionicons name="play-skip-back" size={32} color={Colors.textPrimary} />
+              <Ionicons name="play-skip-back" size={32} color={text} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={{ backgroundColor: Colors.primary, paddingBottom: 24 }} className="flex-row">
+        <View style={{ backgroundColor: Colors.primary, flexDirection: 'row', height: 56 }}>
           <TouchableOpacity
             onPress={handleClose}
-            className="flex-1 flex-row items-center justify-center gap-1 py-4"
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}
           >
             <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
             <Text className="font-medium text-[15px] text-text-primary">Back</Text>
           </TouchableOpacity>
           <View style={{ width: 1, backgroundColor: Colors.primaryDark, marginVertical: 8 }} />
           <TouchableOpacity
-            onPress={recordingUri && elapsed >= 60 ? () => setFinalizeVisible(true) : undefined}
-            className="flex-1 flex-row items-center justify-center gap-1 py-4"
-            style={{ opacity: recordingUri && elapsed >= 60 ? 1 : 0.4 }}
+            onPress={recordingUri && (editAudio && !hasNewRecording || elapsed >= 60) ? () => { if (state === 'playing') { player.pause(); setState('stopped'); } setFinalizeVisible(true); } : undefined}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, opacity: recordingUri && (editAudio && !hasNewRecording || elapsed >= 60) ? 1 : 0.4 }}
           >
             <Text className="font-medium text-[15px] text-text-primary">Next</Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.textPrimary} />
@@ -297,6 +372,11 @@ export default function RecordSheet({ visible, onClose, onSave }: Props) {
       <FinalizeAudioSheet
         visible={finalizeVisible}
         onBack={() => setFinalizeVisible(false)}
+        scheduledDates={scheduledDates}
+        initialTitle={editAudio?.title}
+        initialThumbnailUri={editAudio?.thumbnailUri}
+        initialReleaseDate={editAudio?.releaseDate}
+        releaseDateLocked={editAudio ? (!!editAudio.releaseDate && editAudio.releaseDate <= new Date()) : false}
         onComplete={(data) => {
           onSave({ uri: recordingUri!, durationSeconds: elapsed, ...data });
           doClose();

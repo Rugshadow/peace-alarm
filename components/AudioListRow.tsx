@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import ChannelAvatar from './ChannelAvatar';
 import { useTheme } from '../hooks/useTheme';
+import AppAlert from './AppAlert';
+import { useAppAlert } from '../hooks/useAppAlert';
 
 type Props = {
   id: string;
@@ -56,6 +58,7 @@ export default function AudioListRow({
   onDelete,
 }: Props) {
   const { bg, surface, text, textSecondary } = useTheme();
+  const { showAlert, alertProps } = useAppAlert();
   const isScheduled = !!releaseDate && releaseDate > new Date();
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{ backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: surface }} className="flex-row items-center py-3 px-4">
@@ -91,7 +94,7 @@ export default function AudioListRow({
         <TouchableOpacity
           hitSlop={8}
           onPress={() =>
-            onListenFrom && Alert.alert(
+            onListenFrom && showAlert(
               'Listen from this point?',
               'All clips before this one will be marked as heard.',
               [
@@ -110,7 +113,7 @@ export default function AudioListRow({
         <TouchableOpacity
           hitSlop={8}
           onPress={() =>
-            Alert.alert(
+            showAlert(
               'Set to listen from this point?',
               'This clip and all newer clips will be marked as not heard.',
               [
@@ -124,6 +127,8 @@ export default function AudioListRow({
           <Ionicons name="arrow-back-circle-outline" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
       )}
+
+      <AppAlert {...alertProps} />
 
       {onFavorite && (
         <TouchableOpacity onPress={onFavorite} className="px-2">

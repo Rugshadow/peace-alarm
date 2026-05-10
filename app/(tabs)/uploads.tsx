@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Modal } from 'react-native';
+import AppAlert from '../../components/AppAlert';
+import { useAppAlert } from '../../hooks/useAppAlert';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { decode } from 'base64-arraybuffer';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
@@ -11,7 +14,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase';
 import AudioListRow from '../../components/AudioListRow';
 import RecordSheet from '../../components/RecordSheet';
-import FinalizeAudioSheet from '../../components/FinalizeAudioSheet';
 import CreateChannelSheet from '../../components/CreateChannelSheet';
 import MyChannelsSheet from '../../components/MyChannelsSheet';
 import ChannelSettingsSheet from '../../components/ChannelSettingsSheet';
@@ -26,12 +28,14 @@ type Upload = {
   coverPhoto?: string | null;
   audioUrl?: string;
   releaseDate?: Date;
+  createdAt?: Date;
   uploading?: boolean;
 };
 
 export default function UploadsScreen() {
   const { isLoggedIn, session } = useAuth();
   const { bg, surface, text, textSecondary } = useTheme();
+  const { showAlert, alertProps } = useAppAlert();
   const router = useRouter();
   const [recordVisible, setRecordVisible] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
@@ -49,8 +53,27 @@ export default function UploadsScreen() {
   const [channelSettingsVisible, setChannelSettingsVisible] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [wavPending, setWavPending] = useState<{ uri: string; duration: number } | null>(null);
+  const [wavLoading, setWavLoading] = useState(false);
+  const [editingUpload, setEditingUpload] = useState<Upload | null>(null);
   const player = useAudioPlayer(playingUrl ? { uri: playingUrl } : null);
   const playerStatus = useAudioPlayerStatus(player);
+
+  const playingUrlRef = useRef<string | null>(null);
+  const playerRef = useRef(player);
+  useEffect(() => { playingUrlRef.current = playingUrl; }, [playingUrl]);
+  useEffect(() => { playerRef.current = player; }, [player]);
+
+  const stopAudio = useCallback(() => {
+    if (playingUrlRef.current) {
+      try { playerRef.current.pause(); } catch {}
+      setPlayingId(null);
+      setPlayingUrl(null);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    return () => stopAudio();
+  }, []));
 
   useEffect(() => {
     if (playingUrl) player.play();
@@ -104,6 +127,17 @@ export default function UploadsScreen() {
     setHasChannels(true);
   };
 
+  const sortUploads = (list: Upload[]) => {
+    const now = new Date();
+    return [...list].sort((a, b) => {
+      const aScheduled = !!a.releaseDate && a.releaseDate > now;
+      const bScheduled = !!b.releaseDate && b.releaseDate > now;
+      if (aScheduled !== bScheduled) return aScheduled ? -1 : 1;
+      if (aScheduled && bScheduled) return a.releaseDate!.getTime() - b.releaseDate!.getTime();
+      return (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0);
+    });
+  };
+
   const fetchUploads = async (chId: string) => {
     setUploadsLoading(true);
     const { data } = await supabase
@@ -124,29 +158,22 @@ export default function UploadsScreen() {
         releaseDate: row.release_at ? new Date(row.release_at) : undefined,
         createdAt: new Date(row.created_at),
       }));
-      mapped.sort((a, b) => {
-        const aScheduled = !!a.releaseDate && a.releaseDate > now;
-        const bScheduled = !!b.releaseDate && b.releaseDate > now;
-        if (aScheduled !== bScheduled) return aScheduled ? -1 : 1;
-        // Within unreleased: soonest release date first
-        if (aScheduled && bScheduled) return a.releaseDate!.getTime() - b.releaseDate!.getTime();
-        // Within released: newest first
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      });
-      setUploads(mapped);
+      setUploads(sortUploads(mapped));
     }
     setUploadsLoading(false);
   };
 
   const getWavDuration = async (uri: string, fileSize: number): Promise<number> => {
     try {
+      if (fileSize <= 44) return 0;
       const response = await fetch(uri);
       const buffer = await response.arrayBuffer();
+      if (buffer.byteLength < 32) return 0;
       const view = new DataView(buffer);
       const byteRate = view.getUint32(28, true);
-      console.log('[wav] fileSize:', fileSize, 'byteRate:', byteRate);
-      if (!byteRate || !fileSize) return 0;
-      return Math.round((fileSize - 44) / byteRate);
+      const computed = byteRate > 0 ? Math.round((fileSize - 44) / byteRate) : 0;
+      console.log('[wav] fileSize:', fileSize, 'byteRate:', byteRate, 'computed:', computed, 's');
+      return computed;
     } catch (e) {
       console.error('[wav] getWavDuration error:', e);
       return 0;
@@ -162,21 +189,23 @@ export default function UploadsScreen() {
     const asset = result.assets[0];
     const ext = (asset.name ?? asset.uri).split('.').pop()?.toLowerCase();
     if (ext !== 'wav') {
-      Alert.alert('Invalid file', 'Audio files must be .wav');
+      showAlert('Invalid file', 'Audio files must be .wav');
       return;
     }
-    if ((asset.size ?? 0) > 100 * 1024 * 1024) {
-      Alert.alert('File too long', 'You cannot upload an audio file that is more than 5 minutes in length.');
+    if ((asset.size ?? 0) > 60 * 1024 * 1024) {
+      showAlert('File too long', 'You cannot upload an audio file that is more than 5 minutes in length.');
       return;
     }
+    setWavLoading(true);
     const duration = await getWavDuration(asset.uri, asset.size ?? 0);
+    setWavLoading(false);
     console.log('[wav] parsed duration:', duration, 'seconds');
     if (duration < 60) {
-      Alert.alert('File too short', 'Audio clips must be at least 1 minute in length.');
+      showAlert('File too short', 'Audio clips must be at least 1 minute in length.');
       return;
     }
     if (duration > 300) {
-      Alert.alert('File too long', 'You cannot upload an audio file that is more than 5 minutes in length.');
+      showAlert('File too long', 'You cannot upload an audio file that is more than 5 minutes in length.');
       return;
     }
     setWavPending({ uri: asset.uri, duration });
@@ -257,7 +286,7 @@ export default function UploadsScreen() {
         .select('audio_id')
         .single();
       if (insertError || !audioFile) {
-        Alert.alert('Save failed', insertError?.message ?? 'Unknown error');
+        showAlert('Save failed', insertError?.message ?? 'Unknown error');
         console.error('[upload] insert error:', insertError);
         return;
       }
@@ -272,9 +301,9 @@ export default function UploadsScreen() {
       const updatedUploads = [...((userData?.uploads as string[]) ?? []), (audioFile as any).audio_id];
       await supabase.from('users').update({ uploads: updatedUploads }).eq('user_id', session.user.id);
 
-      // Replace placeholder with the real item
+      // Replace placeholder with the real item, then re-sort so release order is preserved
       const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      setUploads((prev) => prev.map((u) => u.id === placeholderId ? {
+      setUploads((prev) => sortUploads(prev.map((u) => u.id === placeholderId ? {
         id: (audioFile as any).audio_id,
         title: data.title,
         date: dateStr,
@@ -283,17 +312,83 @@ export default function UploadsScreen() {
         coverPhoto: thumbnailUrl,
         audioUrl: audioUrlData.publicUrl,
         releaseDate: data.releaseDate,
-      } : u));
+        createdAt: new Date(),
+      } : u)));
       console.log('[upload] done');
     } catch (e: any) {
       console.error('[upload] caught error:', e);
       setUploads((prev) => prev.filter((u) => u.id !== placeholderId));
-      Alert.alert('Error', e.message ?? 'Something went wrong');
+      showAlert('Error', e.message ?? 'Something went wrong');
+    }
+  };
+
+  const saveEdit = async (
+    uploadId: string,
+    data: { uri: string; title: string; thumbnailUri?: string; thumbnailBase64?: string; releaseDate?: Date; durationSeconds: number },
+  ) => {
+    if (!session) return;
+    try {
+      const isNewAudio = !data.uri.startsWith('http');
+      let audioUrl: string | undefined;
+      let durationSeconds = data.durationSeconds;
+
+      if (isNewAudio) {
+        const audioExt = data.uri.split('.').pop()?.toLowerCase() ?? 'm4a';
+        const audioFileName = `${session.user.id}-${Date.now()}.${audioExt}`;
+        await new Promise<void>((resolve, reject) => {
+          const formData = new FormData();
+          formData.append('file', { uri: data.uri, name: audioFileName, type: `audio/${audioExt}` } as any);
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/audio-files/${audioFileName}`);
+          xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+          xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+          xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`));
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(formData);
+        });
+        const { data: urlData } = supabase.storage.from('audio-files').getPublicUrl(audioFileName);
+        audioUrl = urlData.publicUrl;
+      }
+
+      let thumbnailUrl: string | null | undefined;
+      if (data.thumbnailBase64 && data.thumbnailUri) {
+        const thumbExt = data.thumbnailUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+        const thumbFileName = `${session.user.id}-${Date.now()}-thumb.${thumbExt}`;
+        const thumbArrayBuffer = decode(data.thumbnailBase64);
+        const { error: thumbError } = await supabase.storage
+          .from('audio-thumbnails')
+          .upload(thumbFileName, thumbArrayBuffer, { contentType: `image/${thumbExt}` });
+        if (!thumbError) {
+          const { data: thumbUrlData } = supabase.storage.from('audio-thumbnails').getPublicUrl(thumbFileName);
+          thumbnailUrl = thumbUrlData.publicUrl;
+        }
+      }
+
+      const updates: Record<string, any> = {
+        title: data.title,
+        release_at: data.releaseDate?.toISOString() ?? null,
+      };
+      if (audioUrl) { updates.audio_file = audioUrl; updates.duration_seconds = durationSeconds; }
+      if (thumbnailUrl !== undefined) updates.cover_photo = thumbnailUrl;
+
+      const { error } = await supabase.from('audio_files').update(updates).eq('audio_id', uploadId);
+      if (error) { showAlert('Update failed', error.message); return; }
+
+      setUploads((prev) => prev.map((u) => u.id === uploadId ? {
+        ...u,
+        title: data.title,
+        releaseDate: data.releaseDate,
+        audioUrl: audioUrl ?? u.audioUrl,
+        duration: isNewAudio ? durationSeconds : u.duration,
+        coverPhoto: thumbnailUrl !== undefined ? thumbnailUrl : u.coverPhoto,
+      } : u));
+    } catch (e: any) {
+      showAlert('Error', e.message ?? 'Something went wrong');
     }
   };
 
   const saveCreateChannel = async (
-    { name, genre, coverPhotoUri, coverPhotoBase64 }: { name: string; genre: string; coverPhotoUri?: string; coverPhotoBase64?: string },
+    { name, genre, description, coverPhotoUri, coverPhotoBase64 }: { name: string; genre: string; description: string; coverPhotoUri?: string; coverPhotoBase64?: string },
     onDone?: () => void,
   ) => {
     if (!session) return;
@@ -305,13 +400,13 @@ export default function UploadsScreen() {
       const { error: uploadError } = await supabase.storage
         .from('channel-covers')
         .upload(fileName, arrayBuffer, { contentType: `image/${ext}` });
-      if (uploadError) { Alert.alert('Upload failed', uploadError.message); return; }
+      if (uploadError) { showAlert('Upload failed', uploadError.message); return; }
       const { data: urlData } = supabase.storage.from('channel-covers').getPublicUrl(fileName);
       coverUrl = urlData.publicUrl;
     }
     const { data: channel, error } = await supabase
       .from('channels')
-      .insert({ owner_id: session.user.id, name, genre, cover_photo: coverUrl })
+      .insert({ owner_id: session.user.id, name, genre, bio: description || null, cover_photo: coverUrl })
       .select('channel_id')
       .single();
     if (error || !channel) return;
@@ -361,6 +456,7 @@ export default function UploadsScreen() {
   if (hasChannels === false) {
     return (
       <>
+        <AppAlert {...alertProps} />
         <View className="flex-1 items-center justify-center px-8" style={{ backgroundColor: bg }}>
           <Ionicons name="radio-outline" size={64} color={Colors.primary} />
           <Text className="text-[20px] font-bold mt-4 mb-2 text-center" style={{ color: text }}>No channels yet</Text>
@@ -368,7 +464,7 @@ export default function UploadsScreen() {
             Create a channel to start uploading content for your listeners.
           </Text>
           <TouchableOpacity
-            onPress={() => setCreateChannelVisible(true)}
+            onPress={() => { stopAudio(); setCreateChannelVisible(true); }}
             className="rounded-full px-8 py-3.5"
             style={{ backgroundColor: Colors.primary }}
           >
@@ -385,7 +481,7 @@ export default function UploadsScreen() {
   }
 
   const deleteUpload = (id: string) => {
-    Alert.alert('Delete Audio?', 'This clip will be permanently removed from your channel.', [
+    showAlert('Delete Audio?', 'This clip will be permanently removed from your channel.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -397,6 +493,7 @@ export default function UploadsScreen() {
 
   return (
     <>
+      <AppAlert {...alertProps} />
       <FlatList
         className="flex-1"
         style={{ backgroundColor: bg }}
@@ -411,7 +508,7 @@ export default function UploadsScreen() {
                 resizeMode="cover"
               />
               <TouchableOpacity
-                onPress={() => setMyChannelsVisible(true)}
+                onPress={() => { stopAudio(); setMyChannelsVisible(true); }}
                 className="flex-row items-center gap-1 mt-4 rounded-full px-4 py-2"
                 style={{ backgroundColor: Colors.primary }}
               >
@@ -425,7 +522,7 @@ export default function UploadsScreen() {
 
             <View className="flex-row gap-3 px-4 mb-4">
               <TouchableOpacity
-                onPress={() => setRecordVisible(true)}
+                onPress={() => { stopAudio(); setRecordVisible(true); }}
                 className="flex-1 flex-row items-center justify-center gap-2 rounded-full py-3"
                 style={{ backgroundColor: '#FF3B30' }}
               >
@@ -443,7 +540,7 @@ export default function UploadsScreen() {
             </View>
 
             <TouchableOpacity
-              onPress={() => setChannelSettingsVisible(true)}
+              onPress={() => { stopAudio(); setChannelSettingsVisible(true); }}
               className="mx-4 mb-4 flex-row items-center justify-center gap-2 rounded-full py-3"
               style={{ backgroundColor: Colors.primary }}
             >
@@ -486,33 +583,43 @@ export default function UploadsScreen() {
             isPlaying={playingId === item.id}
             releaseDate={item.releaseDate}
             onPress={() => handleRowPress(item)}
+            onEdit={() => { stopAudio(); setEditingUpload(item); setRecordVisible(true); }}
             onDelete={() => deleteUpload(item.id)}
           />
         )}
       />
 
-      <FinalizeAudioSheet
-        visible={!!wavPending}
-        onBack={() => setWavPending(null)}
-        scheduledDates={uploads.filter(u => u.releaseDate && u.releaseDate > new Date()).map(u => ({ date: u.releaseDate!, title: u.title }))}
-        onComplete={(data) => {
-          if (!wavPending) return;
-          saveRecording({ uri: wavPending.uri, durationSeconds: wavPending.duration, ...data });
-          setWavPending(null);
-        }}
-      />
-
       <RecordSheet
-        visible={recordVisible}
-        onClose={() => setRecordVisible(false)}
+        visible={recordVisible || !!wavPending}
+        onClose={() => { setRecordVisible(false); setEditingUpload(null); setWavPending(null); }}
         scheduledDates={uploads.filter(u => u.releaseDate && u.releaseDate > new Date()).map(u => ({ date: u.releaseDate!, title: u.title }))}
-        onSave={saveRecording}
+        editAudio={editingUpload ? {
+          url: editingUpload.audioUrl ?? '',
+          duration: editingUpload.duration,
+          title: editingUpload.title,
+          thumbnailUri: editingUpload.coverPhoto ?? undefined,
+          releaseDate: editingUpload.releaseDate,
+        } : wavPending ? {
+          url: wavPending.uri,
+          duration: wavPending.duration,
+          title: '',
+        } : undefined}
+        onSave={(data) => {
+          if (editingUpload) {
+            saveEdit(editingUpload.id, data);
+            setEditingUpload(null);
+          } else {
+            saveRecording(data);
+            setWavPending(null);
+          }
+        }}
       />
 
       <MyChannelsSheet
         visible={myChannelsVisible}
         onClose={() => setMyChannelsVisible(false)}
         onAddNew={() => {
+          stopAudio();
           setMyChannelsVisible(false);
           setCreateChannelVisible(true);
         }}
@@ -532,6 +639,15 @@ export default function UploadsScreen() {
         onClose={() => setCreateChannelVisible(false)}
         onSave={(data) => saveCreateChannel(data, () => setCreateChannelVisible(false))}
       />
+
+      <Modal visible={wavLoading} transparent animationType="fade" statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: Colors.surface, borderRadius: 20, padding: 32, alignItems: 'center', gap: 16, width: 220 }}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={{ color: Colors.textPrimary, fontSize: 15, fontWeight: '600' }}>Loading audio...</Text>
+          </View>
+        </View>
+      </Modal>
 
       {channelId && (
         <ChannelSettingsSheet

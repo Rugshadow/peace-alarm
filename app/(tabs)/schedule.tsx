@@ -1,20 +1,21 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Image, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, Image, FlatList, TouchableOpacity, Switch } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import AlarmSheet from '../../components/AlarmSheet';
-import { useAlarms } from '../../hooks/useAlarms';
+import { useAlarmsContext, type SetAlarm } from '../../contexts/AlarmsContext';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function ScheduleScreen() {
   const { timeFormat, isLoggedIn } = useAuth();
   const { bg, text, textSecondary } = useTheme();
-  const { alarms, addAlarm, removeAlarm, refetch } = useAlarms();
+  const { alarms, addAlarm, editAlarm, removeAlarmDirect, toggleAlarm, refetch } = useAlarmsContext();
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [editingAlarm, setEditingAlarm] = useState<SetAlarm | null>(null);
 
   useFocusEffect(useCallback(() => { refetch(); }, []));
 
@@ -31,6 +32,36 @@ export default function ScheduleScreen() {
     const h = alarm.hour % 12 || 12;
     return `${h}:${m} ${alarm.ampm}`;
   };
+
+  const handleCloseSheet = () => {
+    setSheetVisible(false);
+    setEditingAlarm(null);
+  };
+
+  const handleSave = (data: any) => {
+    if (editingAlarm) {
+      editAlarm(editingAlarm.id, data);
+    } else {
+      addAlarm(data);
+    }
+    handleCloseSheet();
+  };
+
+  const handleDelete = async () => {
+    if (!editingAlarm) return;
+    await removeAlarmDirect(editingAlarm.id);
+    handleCloseSheet();
+  };
+
+  const alarmSheet = (
+    <AlarmSheet
+      visible={sheetVisible || editingAlarm !== null}
+      onClose={handleCloseSheet}
+      onSave={handleSave}
+      initialAlarm={editingAlarm ?? undefined}
+      onDelete={editingAlarm ? handleDelete : undefined}
+    />
+  );
 
   if (alarms.length === 0) {
     return (
@@ -57,11 +88,7 @@ export default function ScheduleScreen() {
             </TouchableOpacity>
           )}
         </View>
-        <AlarmSheet
-          visible={sheetVisible}
-          onClose={() => setSheetVisible(false)}
-          onSave={addAlarm}
-        />
+        {alarmSheet}
       </>
     );
   }
@@ -74,17 +101,17 @@ export default function ScheduleScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16, gap: 12 }}
           renderItem={({ item }) => (
-            <View className="bg-surface rounded-2xl overflow-hidden flex-row items-center">
+            <View className="bg-surface rounded-2xl overflow-hidden flex-row items-start">
               {item.channelImageUrl ? (
                 <Image
                   source={{ uri: item.channelImageUrl }}
-                  style={{ alignSelf: 'stretch', aspectRatio: 1 }}
+                  style={{ alignSelf: 'stretch', aspectRatio: 1, opacity: item.active === false ? 0.45 : 1 }}
                   resizeMode="cover"
                 />
               ) : (
-                <View style={{ alignSelf: 'stretch', aspectRatio: 1, backgroundColor: Colors.primaryLight }} />
+                <View style={{ alignSelf: 'stretch', aspectRatio: 1, backgroundColor: Colors.primaryLight, opacity: item.active === false ? 0.45 : 1 }} />
               )}
-              <View className="flex-1 px-4 py-3">
+              <View className="flex-1 px-4 py-3" style={{ opacity: item.active === false ? 0.45 : 1 }}>
                 <Text className="text-[26px] font-bold text-text-primary mb-0.5">
                   {formatTime(item)}
                 </Text>
@@ -113,9 +140,17 @@ export default function ScheduleScreen() {
                   })}
                 </View>
               </View>
-              <TouchableOpacity onPress={() => removeAlarm(item.id)} className="pr-4">
-                <Ionicons name="trash-outline" size={22} color={Colors.destructive} />
-              </TouchableOpacity>
+              <View className="flex-row items-center pr-3 pt-3 gap-2">
+                <Switch
+                  value={item.active !== false}
+                  onValueChange={() => toggleAlarm(item.id)}
+                  trackColor={{ false: '#ccc', true: Colors.primary }}
+                  thumbColor="#fff"
+                />
+                <TouchableOpacity onPress={() => setEditingAlarm(item)}>
+                  <Ionicons name="create-outline" size={24} color={text} />
+                </TouchableOpacity>
+              </View>
             </View>
           )}
           ListFooterComponent={
@@ -129,11 +164,7 @@ export default function ScheduleScreen() {
           }
         />
       </View>
-      <AlarmSheet
-        visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
-        onSave={addAlarm}
-      />
+      {alarmSheet}
     </>
   );
 }

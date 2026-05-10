@@ -4,11 +4,12 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
   NativeModules,
 } from 'react-native';
+import AppAlert from './AppAlert';
+import { useAppAlert } from '../hooks/useAppAlert';
 
 const { IntentData } = NativeModules;
 
@@ -51,6 +52,7 @@ export default function AccountSheet({ visible, onClose }: Props) {
   const [alarmCount, setAlarmCount] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const { showAlert, alertProps } = useAppAlert();
   const [selectedFallback, setSelectedFallback] = useState('alarm');
   const [previewingSound, setPreviewingSound] = useState<string | null>(null);
   const [fallbackExpanded, setFallbackExpanded] = useState(false);
@@ -139,31 +141,27 @@ export default function AccountSheet({ visible, onClose }: Props) {
       onClose();
     } catch (e: any) {
       setDeleting(false);
-      Alert.alert('Error', e.message ?? 'Failed to delete account. Please try again.');
+      showAlert('Error', e.message ?? 'Failed to delete account. Please try again.');
     }
   };
 
   const handleDeleteAllAlarms = () => {
     if (alarms.length === 0) {
-      Alert.alert('No Alarms', 'You have no alarms to delete.');
+      showAlert('No Alarms', 'You have no alarms to delete.');
       return;
     }
-    Alert.alert(
+    showAlert(
       'Delete All Alarms',
       `This will delete all ${alarms.length} alarm${alarms.length !== 1 ? 's' : ''}. This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete All',
-          style: 'destructive',
-          onPress: clearAllAlarms,
-        },
+        { text: 'Delete All', style: 'destructive', onPress: clearAllAlarms },
       ]
     );
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showAlert(
       'Delete Account',
       'This will permanently delete your account, all channels, and all uploaded audio. This cannot be undone.',
       [
@@ -187,6 +185,7 @@ export default function AccountSheet({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <AppAlert {...alertProps} />
       <SafeAreaView className="flex-1" style={{ backgroundColor: bg }} edges={['left', 'right']}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
           <View className="px-6 pt-2 pb-3">

@@ -21,12 +21,13 @@ const GENRES = [
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSave: (data: { name: string; genre: string; coverPhotoUri?: string; coverPhotoBase64?: string }) => void;
+  onSave: (data: { name: string; genre: string; description: string; coverPhotoUri?: string; coverPhotoBase64?: string }) => void;
 };
 
 export default function CreateChannelSheet({ visible, onClose, onSave }: Props) {
   const [name, setName] = useState('');
   const [genre, setGenre] = useState('');
+  const [description, setDescription] = useState('');
   const [coverUri, setCoverUri] = useState<string | undefined>();
   const [coverBase64, setCoverBase64] = useState<string | undefined>();
 
@@ -51,6 +52,7 @@ export default function CreateChannelSheet({ visible, onClose, onSave }: Props) 
   const reset = () => {
     setName('');
     setGenre('');
+    setDescription('');
     setCoverUri(undefined);
     setCoverBase64(undefined);
   };
@@ -62,7 +64,7 @@ export default function CreateChannelSheet({ visible, onClose, onSave }: Props) 
 
   const handleSave = () => {
     if (!isComplete) return;
-    onSave({ name: name.trim(), genre, coverPhotoUri: coverUri, coverPhotoBase64: coverBase64 });
+    onSave({ name: name.trim(), genre, description: description.trim(), coverPhotoUri: coverUri, coverPhotoBase64: coverBase64 });
     reset();
     onClose();
   };
@@ -117,6 +119,27 @@ export default function CreateChannelSheet({ visible, onClose, onSave }: Props) 
             autoCapitalize="none"
             autoCorrect={false}
             autoComplete="off"
+          />
+
+          {/* Description */}
+          <View className="flex-row justify-between items-baseline mt-6 mb-2">
+            <Text className="text-[12px] font-semibold text-text-secondary tracking-wider">DESCRIPTION</Text>
+            <Text className="text-[12px]" style={{ color: description.length > 130 ? (description.length >= 150 ? '#E53935' : '#F59E0B') : Colors.textSecondary }}>
+              {description.length}/150
+            </Text>
+          </View>
+          <TextInput
+            value={description}
+            onChangeText={(t) => setDescription(t.slice(0, 150))}
+            placeholder="Tell listeners what your channel is about..."
+            placeholderTextColor={Colors.textSecondary}
+            className="bg-surface rounded-2xl px-4 py-3.5 text-[15px] text-text-primary"
+            multiline
+            numberOfLines={3}
+            maxLength={150}
+            autoCapitalize="sentences"
+            autoCorrect
+            style={{ minHeight: 80, textAlignVertical: 'top' }}
           />
 
           {/* Genre */}

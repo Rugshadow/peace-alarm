@@ -5,14 +5,15 @@ import { getChannelColor } from '../constants/colors';
 type Props = {
   id: string;
   name: string;
-  size?: 'carousel' | 'list' | 'large';
+  size?: 'carousel' | 'grid' | 'list' | 'large';
   imageUrl?: string;
 };
 
 const SIZE_MAP = {
   carousel: { container: 120, text: 36, radius: 0 },
-  list: { container: 60, text: 20, radius: 0 },
-  large: { container: 220, text: 40, radius: 0 },
+  grid:     { container: 90,  text: 26, radius: 0 },
+  list:     { container: 60,  text: 20, radius: 0 },
+  large:    { container: 220, text: 40, radius: 0 },
 };
 
 export default function ChannelAvatar({ id, name, size = 'carousel', imageUrl }: Props) {

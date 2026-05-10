@@ -5,8 +5,9 @@ import {
   Modal,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
+import AppAlert from './AppAlert';
+import { useAppAlert } from '../hooks/useAppAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
@@ -48,6 +49,7 @@ type Props = {
 export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: Props) {
   const { session, isLoggedIn } = useAuth();
   const { bg, text, textSecondary } = useTheme();
+  const { showAlert, alertProps } = useAppAlert();
   const { playingId, play, stop } = useAudioPlayer();
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteClips, setFavoriteClips] = useState<string[]>([]);
@@ -121,7 +123,7 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   };
 
   const showLoginAlert = () => {
-    Alert.alert('Login Required', 'Log in or create an account to set an alarm or save a favorite.');
+    showAlert('Login Required', 'Log in or create an account to set an alarm or save a favorite.');
   };
 
   const handleListenFrom = async (clipIndex: number) => {
@@ -149,7 +151,7 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   };
 
   const toggleFavoriteClip = async (clipId: string) => {
-    if (!isLoggedIn || !session) { Alert.alert('Login Required', 'You must be logged in to save a favorite.'); return; }
+    if (!isLoggedIn || !session) { showAlert('Login Required', 'You must be logged in to save a favorite.'); return; }
     const { data } = await supabase
       .from('users')
       .select('favorite_samples')
@@ -167,6 +169,7 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <AppAlert {...alertProps} />
       <SafeAreaView className="flex-1" style={{ backgroundColor: bg }} edges={['top', 'left', 'right']}>
         <ScrollView>
           <View className="items-center px-6 pt-8 pb-6">

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import AppAlert from '../../components/AppAlert';
+import { useAppAlert } from '../../hooks/useAppAlert';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -20,6 +22,7 @@ export default function FavoritesScreen() {
   const { isLoggedIn, session } = useAuth();
   const { bg } = useTheme();
   const { addAlarm } = useAlarmsContext();
+  const { showAlert, alertProps } = useAppAlert();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('channels');
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -131,7 +134,7 @@ export default function FavoritesScreen() {
   };
 
   const handleUnfavoriteClip = (id: string) => {
-    Alert.alert('Remove Favorite', 'Remove this clip from your favorites?', [
+    showAlert('Remove Favorite', 'Remove this clip from your favorites?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -174,6 +177,7 @@ export default function FavoritesScreen() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: bg }}>
+      <AppAlert {...alertProps} />
       <View className="mx-4 mt-4 mb-2 bg-surface rounded-2xl p-1 flex-row">
         {(['channels', 'clips'] as Tab[]).map((tab) => (
           <TouchableOpacity

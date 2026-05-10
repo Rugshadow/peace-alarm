@@ -148,6 +148,53 @@ export type AlarmData = {
   active?: boolean;
 };
 
+const PICKER_GENRES = ['Music', 'News', 'Comedy', 'Ambient', 'Motivational', 'Religious', 'Education', 'Storytelling', 'Fitness', 'Alternative'];
+
+function PickerCarouselRow({
+  title,
+  channels,
+  onPress,
+  onSeeMore,
+}: {
+  title: string;
+  channels: Channel[];
+  onPress: (ch: Channel) => void;
+  onSeeMore?: () => void;
+}) {
+  const { text, textSecondary } = useTheme();
+  if (channels.length === 0) return null;
+  const visible = channels.slice(0, 10);
+  const hasMore = channels.length > 10;
+  return (
+    <View className="mb-6">
+      <Text className="text-[17px] font-bold px-4 mb-3" style={{ color: text }}>{title}</Text>
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={visible}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 14 }}
+        ListFooterComponent={hasMore && onSeeMore ? (
+          <TouchableOpacity
+            onPress={onSeeMore}
+            className="items-center justify-center"
+            style={{ width: 120, height: 120, backgroundColor: Colors.primary }}
+          >
+            <Ionicons name="arrow-forward-circle-outline" size={24} color={Colors.textPrimary} />
+            <Text className="text-[10px] font-semibold mt-1" style={{ color: Colors.textPrimary }}>See More</Text>
+          </TouchableOpacity>
+        ) : null}
+        renderItem={({ item }) => (
+          <TouchableOpacity onPress={() => onPress(item)} className="items-center" style={{ width: 120 }}>
+            <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
+            <Text className="text-[11px] mt-2 text-center" numberOfLines={2} style={{ color: textSecondary }}>{item.name}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+}
+
 function ChannelPickerModal({
   visible,
   onSelect,
@@ -159,16 +206,25 @@ function ChannelPickerModal({
 }) {
   const { session, isLoggedIn } = useAuth();
   const { bg, surface, text, textSecondary } = useTheme();
+  const [tab, setTab] = useState<'favorites' | 'all'>('favorites');
   const [search, setSearch] = useState('');
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [favChannels, setFavChannels] = useState<Channel[]>([]);
+  const [favLoading, setFavLoading] = useState(false);
+  const [allChannels, setAllChannels] = useState<Channel[]>([]);
+  const [allLoading, setAllLoading] = useState(false);
+  const [gridView, setGridView] = useState<{ title: string; channels: Channel[] } | null>(null);
 
   useEffect(() => {
-    if (visible && isLoggedIn && session) fetchFavoriteChannels();
+    if (visible) {
+      setTab('favorites');
+      setSearch('');
+      setGridView(null);
+      if (isLoggedIn && session) fetchFavoriteChannels();
+    }
   }, [visible]);
 
   const fetchFavoriteChannels = async () => {
-    setLoading(true);
+    setFavLoading(true);
     try {
       const { data: userData } = await supabase
         .from('users')
@@ -177,16 +233,16 @@ function ChannelPickerModal({
         .single();
 
       const favIds: string[] = userData?.favorite_channels ?? [];
-      if (favIds.length === 0) { setChannels([]); setLoading(false); return; }
+      if (favIds.length === 0) { setFavChannels([]); setFavLoading(false); return; }
 
-      const { data: favChannels, error } = await supabase
+      const { data: rows, error } = await supabase
         .from('channels')
         .select('*')
         .in('channel_id', favIds);
 
       if (error) throw error;
 
-      const mapped: Channel[] = (favChannels ?? []).map((ch) => ({
+      setFavChannels((rows ?? []).map((ch) => ({
         id: ch.channel_id,
         name: ch.name,
         genre: ch.genre ?? '',
@@ -194,12 +250,10 @@ function ChannelPickerModal({
         bio: ch.bio ?? '',
         imageUrl: ch.cover_photo ?? undefined,
         uploads: [],
-      }));
-
-      setChannels(mapped);
+      })));
     } catch {
       const cached = await getCachedFavorites();
-      const mapped: Channel[] = cached.map((ch) => ({
+      setFavChannels(cached.map((ch) => ({
         id: ch.id,
         name: ch.name,
         genre: '',
@@ -207,15 +261,61 @@ function ChannelPickerModal({
         bio: '',
         imageUrl: resolveImageUri(ch),
         uploads: [],
-      }));
-      setChannels(mapped);
+      })));
     }
-    setLoading(false);
+    setFavLoading(false);
   };
 
-  const filtered = search.trim()
-    ? channels.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
-    : channels;
+  const fetchAllChannels = async () => {
+    setAllLoading(true);
+    try {
+      const { data } = await supabase
+        .from('channels')
+        .select('channel_id, name, genre, cover_photo, listening_order');
+      setAllChannels((data ?? []).map((ch: any) => ({
+        id: ch.channel_id,
+        name: ch.name,
+        genre: ch.genre ?? '',
+        listeners: 0,
+        bio: '',
+        imageUrl: ch.cover_photo ?? undefined,
+        uploads: [],
+        listeningOrder: ch.listening_order ?? 'newest',
+      })));
+    } catch {}
+    setAllLoading(false);
+  };
+
+  const handleTabChange = (newTab: 'favorites' | 'all') => {
+    setTab(newTab);
+    setSearch('');
+    setGridView(null);
+    if (newTab === 'all' && allChannels.length === 0) fetchAllChannels();
+  };
+
+  const handleSelect = (ch: Channel) => { onSelect(ch); onClose(); };
+
+  const activeChannels = tab === 'favorites' ? favChannels : allChannels;
+  const loading = tab === 'favorites' ? favLoading : allLoading;
+  const query = search.toLowerCase().trim();
+  const filtered = query
+    ? activeChannels.filter((c) => c.name.toLowerCase().includes(query))
+    : activeChannels;
+
+  // "All" browse layout — only when not searching
+  const topChannels = [...allChannels].sort((a, b) => a.name.localeCompare(b.name));
+  const genres = PICKER_GENRES.filter((g) => allChannels.some((c) => c.genre === g));
+  const genreSections = genres.map((g) => ({
+    title: g,
+    channels: allChannels.filter((c) => c.genre === g),
+  }));
+
+  const renderGridItem = ({ item }: { item: Channel }) => (
+    <TouchableOpacity className="flex-1 items-center" onPress={() => handleSelect(item)}>
+      <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
+      <Text className="text-[11px] mt-2 text-center" style={{ color: textSecondary }} numberOfLines={2}>{item.name}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -223,11 +323,39 @@ function ChannelPickerModal({
         <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
           <View className="px-4 pt-2 pb-3">
             <Text className="text-[17px] font-semibold text-text-primary text-center">
-              Favorites
+              Choose a Channel
             </Text>
           </View>
         </SafeAreaView>
 
+        {/* Tab slider */}
+        <View className="px-4 pt-3 pb-1">
+          <View className="rounded-2xl p-1 flex-row" style={{ backgroundColor: surface }}>
+            {(['favorites', 'all'] as const).map((t) => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => handleTabChange(t)}
+                className="flex-1 py-2.5 rounded-xl items-center"
+                style={{
+                  backgroundColor: tab === t ? bg : 'transparent',
+                  shadowColor: tab === t ? '#000' : 'transparent',
+                  shadowOpacity: tab === t ? 0.08 : 0,
+                  shadowRadius: 4,
+                  elevation: tab === t ? 2 : 0,
+                }}
+              >
+                <Text
+                  className="font-medium text-[15px]"
+                  style={{ color: tab === t ? text : textSecondary }}
+                >
+                  {t === 'favorites' ? 'Favorites' : 'All'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Search bar */}
         <View className="px-4 py-3">
           <View className="flex-row items-center rounded-2xl px-4 py-3 gap-2" style={{ backgroundColor: surface }}>
             <Ionicons name="search" size={18} color={textSecondary} />
@@ -241,43 +369,75 @@ function ChannelPickerModal({
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')}>
+                <Ionicons name="close-circle" size={18} color={textSecondary} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
+        {/* Content */}
         {loading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
-        ) : filtered.length === 0 ? (
-          <View className="flex-1 items-center justify-center px-8">
-            <Text className="text-[15px] text-center" style={{ color: textSecondary }}>
-              {isLoggedIn ? 'No favorite channels yet. Add some from the Browse tab.' : 'Log in to see your favorites.'}
-            </Text>
-          </View>
-        ) : (
+        ) : tab === 'favorites' || query ? (
+          // Favorites tab OR search results: flat grid
+          filtered.length === 0 ? (
+            <View className="flex-1 items-center justify-center px-8">
+              <Text className="text-[15px] text-center" style={{ color: textSecondary }}>
+                {tab === 'favorites'
+                  ? isLoggedIn
+                    ? 'No favorite channels yet. Add some from the Browse tab.'
+                    : 'Log in to see your favorites.'
+                  : `No channels found for "${search}"`}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => item.id}
+              numColumns={3}
+              contentContainerStyle={{ padding: 16, gap: 16 }}
+              columnWrapperStyle={{ gap: 16 }}
+              renderItem={renderGridItem}
+            />
+          )
+        ) : gridView ? (
+          // "See More" grid view
           <FlatList
-            data={filtered}
+            data={gridView.channels}
             keyExtractor={(item) => item.id}
             numColumns={3}
             contentContainerStyle={{ padding: 16, gap: 16 }}
             columnWrapperStyle={{ gap: 16 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                className="flex-1 items-center"
-                onPress={() => { onSelect(item); onClose(); }}
-              >
-                <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
-                <Text className="text-[12px] mt-2 text-center" style={{ color: textSecondary }} numberOfLines={2}>
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            )}
+            renderItem={renderGridItem}
           />
+        ) : (
+          // "All" tab — browse layout with carousels
+          <ScrollView showsVerticalScrollIndicator={false} className="flex-1" contentContainerStyle={{ paddingTop: 8, paddingBottom: 16 }}>
+            <PickerCarouselRow
+              title="All Channels"
+              channels={topChannels}
+              onPress={handleSelect}
+              onSeeMore={() => setGridView({ title: 'All Channels', channels: topChannels })}
+            />
+            {genreSections.map((section) => (
+              <PickerCarouselRow
+                key={section.title}
+                title={section.title}
+                channels={section.channels}
+                onPress={handleSelect}
+                onSeeMore={() => setGridView(section)}
+              />
+            ))}
+          </ScrollView>
         )}
 
         <View style={{ backgroundColor: Colors.primary }}>
           <TouchableOpacity
-            onPress={onClose}
+            onPress={gridView ? () => setGridView(null) : onClose}
             className="flex-row items-center justify-center gap-1 py-4"
             style={{ paddingBottom: 24 }}
           >

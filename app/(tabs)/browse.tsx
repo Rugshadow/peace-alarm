@@ -9,14 +9,14 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import ChannelAvatar from '../../components/ChannelAvatar';
 import ChannelSheet, { type Channel } from '../../components/ChannelSheet';
 import AlarmSheet from '../../components/AlarmSheet';
 import { useChannels } from '../../hooks/useChannels';
-import { useAlarms } from '../../hooks/useAlarms';
+import { useAlarmsContext } from '../../contexts/AlarmsContext';
 import { useTheme } from '../../hooks/useTheme';
 
 const GENRES = ['Music', 'News', 'Comedy', 'Ambient', 'Motivational', 'Religious', 'Education', 'Storytelling', 'Fitness', 'Alternative'];
@@ -35,6 +35,7 @@ function GenreGridSheet({
   onPress: (ch: Channel) => void;
 }) {
   const { bg, text, textSecondary } = useTheme();
+  const { bottom } = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView className="flex-1" style={{ backgroundColor: bg }} edges={['left', 'right']}>
@@ -52,7 +53,7 @@ function GenreGridSheet({
           columnWrapperStyle={{ gap: 16 }}
           renderItem={({ item }) => (
             <TouchableOpacity
-              onPress={() => { onPress(item); onClose(); }}
+              onPress={() => onPress(item)}
               className="flex-1 items-center"
             >
               <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
@@ -63,10 +64,10 @@ function GenreGridSheet({
           )}
         />
 
-        <View style={{ backgroundColor: Colors.primary, paddingBottom: 24 }}>
+        <View style={{ backgroundColor: Colors.primary, height: 56 }}>
           <TouchableOpacity
             onPress={onClose}
-            className="flex-row items-center justify-center gap-1 py-4"
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}
           >
             <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
             <Text className="font-medium text-[15px] text-text-primary">Back</Text>
@@ -136,7 +137,7 @@ function CarouselSection({
 export default function BrowseScreen() {
   const { bg, textSecondary } = useTheme();
   const { channels, loading } = useChannels();
-  const { addAlarm } = useAlarms();
+  const { addAlarm } = useAlarmsContext();
   const [searchText, setSearchText] = useState('');
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
