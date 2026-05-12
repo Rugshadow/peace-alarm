@@ -7,6 +7,8 @@ import type { Session } from '@supabase/supabase-js';
 
 const { IntentData } = NativeModules;
 const VOLUME_KEY = 'alarmVolume';
+const TIME_FORMAT_KEY = 'timeFormat';
+const COLOR_SCHEME_KEY = 'colorScheme';
 
 type TimeFormat = 'standard' | 'military';
 type ColorScheme = 'light' | 'dark';
@@ -23,6 +25,8 @@ type AuthContextType = {
   alarmVolume: number;
   setAlarmVolume: (vol: number) => void;
   signOut: () => void;
+  refreshUser: () => void;
+  setUsername: (username: string) => void;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,6 +41,8 @@ const AuthContext = createContext<AuthContextType>({
   alarmVolume: 1,
   setAlarmVolume: () => {},
   signOut: () => {},
+  refreshUser: () => {},
+  setUsername: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -69,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setTimeFormat = async (fmt: TimeFormat) => {
     setTimeFormatState(fmt);
+    AsyncStorage.setItem(TIME_FORMAT_KEY, fmt);
     if (session) {
       await supabase.from('users').update({ time_format: fmt } as any).eq('user_id', session.user.id);
     }
@@ -76,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setColorScheme = async (scheme: ColorScheme) => {
     setColorSchemeState(scheme);
+    AsyncStorage.setItem(COLOR_SCHEME_KEY, scheme);
     if (session) {
       await supabase.from('users').update({ color_scheme: scheme } as any).eq('user_id', session.user.id);
     }
@@ -88,13 +96,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    AsyncStorage.getItem(VOLUME_KEY).then((v) => {
-      if (v !== null) {
-        const parsed = parseFloat(v);
+    AsyncStorage.multiGet([VOLUME_KEY, TIME_FORMAT_KEY, COLOR_SCHEME_KEY]).then((pairs) => {
+      const volume = pairs[0][1];
+      const timeFormat = pairs[1][1];
+      const colorScheme = pairs[2][1];
+      if (volume !== null) {
+        const parsed = parseFloat(volume);
         if (!isNaN(parsed)) {
           setAlarmVolumeState(parsed);
           try { IntentData?.setAlarmVolume?.(parsed); } catch {}
         }
+      }
+      if (timeFormat === 'standard' || timeFormat === 'military') {
+        setTimeFormatState(timeFormat);
+      }
+      if (colorScheme === 'light' || colorScheme === 'dark') {
+        setColorSchemeState(colorScheme);
       }
     });
   }, []);
@@ -138,6 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       alarmVolume: alarmVolumeState,
       setAlarmVolume,
       signOut: () => { stopAllAudio(); supabase.auth.signOut(); },
+      refreshUser: () => { if (session) fetchUserPrefs(session.user.id, session); },
+      setUsername: (u: string) => setUsername(u),
     }}>
       {children}
     </AuthContext.Provider>

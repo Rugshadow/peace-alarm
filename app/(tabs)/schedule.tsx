@@ -22,7 +22,7 @@ export default function ScheduleScreen() {
   const formatTime = (alarm: SetAlarm) => {
     const m = String(alarm.minute).padStart(2, '0');
     if (timeFormat === 'military') {
-      const h = alarm.ampm === 'PM' && alarm.hour !== 12
+      const h = alarm.ampm === 'PM' && alarm.hour !== 12 && alarm.hour <= 12
         ? alarm.hour + 12
         : alarm.ampm === 'AM' && alarm.hour === 12
         ? 0
@@ -73,11 +73,11 @@ export default function ScheduleScreen() {
             resizeMode="cover"
           />
           <Text className="text-[20px] font-bold mb-2" style={{ color: text }}>No alarms yet</Text>
-          <Text className="text-[15px] text-center mb-8" style={{ color: textSecondary }}>
-            {isLoggedIn
-              ? 'Set your first alarm to wake up to your favorite creator'
-              : 'Log in or create an account to set an alarm.'}
-          </Text>
+          {!isLoggedIn && (
+            <Text className="text-[15px] text-center mb-8" style={{ color: textSecondary }}>
+              Log in or create an account to set an alarm.
+            </Text>
+          )}
           {isLoggedIn && (
             <TouchableOpacity
               onPress={() => setSheetVisible(true)}

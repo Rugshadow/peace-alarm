@@ -50,6 +50,7 @@ export default function UploadsScreen() {
   const [channelCover, setChannelCover] = useState<string | null>(null);
   const [channelGenre, setChannelGenre] = useState<string>('');
   const [channelListeningOrder, setChannelListeningOrder] = useState<'newest' | 'oldest'>('newest');
+  const [channelListeners, setChannelListeners] = useState(0);
   const [channelSettingsVisible, setChannelSettingsVisible] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [wavPending, setWavPending] = useState<{ uri: string; duration: number } | null>(null);
@@ -110,21 +111,33 @@ export default function UploadsScreen() {
       .single();
     const channelIds: string[] = (userData as any)?.channels ?? [];
     if (channelIds.length === 0) { setHasChannels(false); return; }
-    const savedChannelId = await AsyncStorage.getItem('selected_channel_id');
-    const preferredId = savedChannelId && channelIds.includes(savedChannelId) ? savedChannelId : channelIds[0];
-    const { data: channel } = await supabase
+
+    const { data: channels } = await supabase
       .from('channels')
-      .select('channel_id, name, cover_photo, genre, listening_order')
-      .eq('channel_id', preferredId)
-      .single();
-    if (channel) {
-      setChannelId((channel as any).channel_id);
-      setChannelName((channel as any).name);
-      setChannelCover((channel as any).cover_photo ?? null);
-      setChannelGenre((channel as any).genre ?? '');
-      setChannelListeningOrder((channel as any).listening_order ?? 'newest');
-    }
+      .select('channel_id, name, cover_photo, genre')
+      .in('channel_id', channelIds);
+    if (!channels || channels.length === 0) { setHasChannels(false); return; }
+
+    const savedChannelId = await AsyncStorage.getItem('selected_channel_id');
+    const preferred = (savedChannelId && channels.find((c: any) => c.channel_id === savedChannelId)) || channels[0];
+    const preferredId = (preferred as any).channel_id;
+
+    setChannelId(preferredId);
+    setChannelName((preferred as any).name);
+    setChannelCover((preferred as any).cover_photo ?? null);
+    setChannelGenre((preferred as any).genre ?? '');
     setHasChannels(true);
+
+    // Fetch extra fields separately so a missing column never breaks the main load
+    const { data: extra } = await supabase
+      .from('channels')
+      .select('listening_order, listeners')
+      .eq('channel_id', preferredId)
+      .maybeSingle();
+    if (extra) {
+      setChannelListeningOrder((extra as any).listening_order ?? 'newest');
+      setChannelListeners((extra as any).listeners ?? 0);
+    }
   };
 
   const sortUploads = (list: Upload[]) => {
@@ -516,7 +529,7 @@ export default function UploadsScreen() {
                 <Ionicons name="chevron-down" size={16} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text className="text-text-secondary text-[13px] mt-1">
-                {uploads.length} upload{uploads.length !== 1 ? 's' : ''}
+                {uploads.length} upload{uploads.length !== 1 ? 's' : ''} · {channelListeners} listener{channelListeners !== 1 ? 's' : ''} · {channelGenre}
               </Text>
             </View>
 

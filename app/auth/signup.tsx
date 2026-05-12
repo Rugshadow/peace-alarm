@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import PrivacyPolicySheet from '../../components/PrivacyPolicySheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [privacyVisible, setPrivacyVisible] = useState(false);
 
   const handleSignup = async () => {
     if (!email || !username || !password) return;
@@ -112,13 +114,23 @@ export default function SignupScreen() {
           <TouchableOpacity
             onPress={handleSignup}
             disabled={loading}
-            className="rounded-full py-4 items-center mt-4 mb-8"
+            className="rounded-full py-4 items-center mt-4 mb-4"
             style={{ backgroundColor: Colors.primary }}
           >
             <Text className="font-bold text-[16px] text-text-primary">
               {loading ? 'Creating account...' : 'Create Account'}
             </Text>
           </TouchableOpacity>
+
+          <Text className="text-text-secondary text-[13px] text-center mb-8">
+            By creating an account, you agree to our{' '}
+            <Text
+              style={{ color: Colors.primary, textDecorationLine: 'underline' }}
+              onPress={() => setPrivacyVisible(true)}
+            >
+              Privacy Policy
+            </Text>
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -132,6 +144,8 @@ export default function SignupScreen() {
           <Text className="font-medium text-[15px] text-text-primary">Back</Text>
         </TouchableOpacity>
       </View>
+
+      <PrivacyPolicySheet visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
     </SafeAreaView>
   );
 }

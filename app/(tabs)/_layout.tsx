@@ -34,7 +34,7 @@ function Header({ routeName }: { routeName: string }) {
     browse: 'Browse Alarm Feeds',
     favorites: 'Favorites',
     schedule: 'Scheduled Alarms',
-    uploads: username ? `${username}'s Uploads` : 'Uploads',
+    uploads: username ?? 'Create',
   };
   const title = titles[routeName] ?? '';
 

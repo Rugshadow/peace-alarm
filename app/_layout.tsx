@@ -139,6 +139,7 @@ export default function RootLayout() {
               <Stack.Screen name="auth/login-email" />
               <Stack.Screen name="auth/signup" />
               <Stack.Screen name="auth/callback" />
+              <Stack.Screen name="auth/create-username" />
             </Stack>
           </AppBootstrap>
         </AlarmsProvider>

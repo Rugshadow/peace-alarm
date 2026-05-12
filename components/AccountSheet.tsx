@@ -9,6 +9,7 @@ import {
   NativeModules,
 } from 'react-native';
 import AppAlert from './AppAlert';
+import PrivacyPolicySheet from './PrivacyPolicySheet';
 import { useAppAlert } from '../hooks/useAppAlert';
 
 const { IntentData } = NativeModules;
@@ -56,6 +57,8 @@ export default function AccountSheet({ visible, onClose }: Props) {
   const [selectedFallback, setSelectedFallback] = useState('alarm');
   const [previewingSound, setPreviewingSound] = useState<string | null>(null);
   const [fallbackExpanded, setFallbackExpanded] = useState(false);
+  const [privacyVisible, setPrivacyVisible] = useState(false);
+  const [accountExpanded, setAccountExpanded] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -184,13 +187,15 @@ export default function AccountSheet({ visible, onClose }: Props) {
   };
 
   return (
+    <>
+    <PrivacyPolicySheet visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <AppAlert {...alertProps} />
       <SafeAreaView className="flex-1" style={{ backgroundColor: bg }} edges={['left', 'right']}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
           <View className="px-6 pt-2 pb-3">
             <Text className="text-[17px] font-semibold text-text-primary text-center">
-              {username ?? 'Account'}
+              Settings
             </Text>
           </View>
         </SafeAreaView>
@@ -337,32 +342,48 @@ export default function AccountSheet({ visible, onClose }: Props) {
           </View>
 
           <TouchableOpacity
-            onPress={() => { signOut(); onClose(); }}
+            onPress={() => setPrivacyVisible(true)}
             className="rounded-full py-3.5 items-center mb-3"
             style={{ backgroundColor: surface }}
           >
-            <Text className="font-semibold text-[15px]" style={{ color: text }}>Log Out</Text>
+            <Text className="font-semibold text-[15px]" style={{ color: textSecondary }}>Privacy Policy</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={handleDeleteAllAlarms}
-            className="rounded-full py-3.5 items-center mb-3"
-            style={{ backgroundColor: colorScheme === 'dark' ? '#4A1010' : Colors.destructiveLight }}
+            onPress={() => setAccountExpanded(e => !e)}
+            className="rounded-full py-3.5 items-center mb-3 flex-row justify-center gap-2"
+            style={{ backgroundColor: surface }}
           >
-            <Text className="font-semibold text-[15px]" style={{ color: colorScheme === 'dark' ? '#FF6B6B' : Colors.destructive }}>Delete All Alarms</Text>
+            <Text className="font-semibold text-[15px]" style={{ color: textSecondary }}>Account</Text>
+            <Ionicons name={accountExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={handleDeleteAccount}
-            disabled={deleting}
-            className="rounded-full py-3.5 items-center"
-            style={{ backgroundColor: colorScheme === 'dark' ? '#4A1010' : Colors.destructiveLight }}
-          >
-            {deleting
-              ? <ActivityIndicator size="small" color={colorScheme === 'dark' ? '#FF6B6B' : Colors.destructive} />
-              : <Text className="font-semibold text-[15px]" style={{ color: colorScheme === 'dark' ? '#FF6B6B' : Colors.destructive }}>Delete Account</Text>
-            }
-          </TouchableOpacity>
+          {accountExpanded && (
+            <View className="rounded-2xl overflow-hidden mb-3" style={{ backgroundColor: surface }}>
+              <TouchableOpacity
+                onPress={() => { setAccountExpanded(false); signOut(); onClose(); }}
+                style={{ paddingHorizontal: 24, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: bg }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: text, textAlign: 'center' }}>Log Out</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setAccountExpanded(false); handleDeleteAllAlarms(); }}
+                style={{ paddingHorizontal: 24, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: bg }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colorScheme === 'dark' ? '#FF6B6B' : Colors.destructive, textAlign: 'center' }}>Delete All Alarms</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setAccountExpanded(false); handleDeleteAccount(); }}
+                disabled={deleting}
+                style={{ paddingHorizontal: 24, paddingVertical: 16 }}
+              >
+                {deleting
+                  ? <ActivityIndicator size="small" color={colorScheme === 'dark' ? '#FF6B6B' : Colors.destructive} />
+                  : <Text style={{ fontSize: 15, fontWeight: '600', color: colorScheme === 'dark' ? '#FF6B6B' : Colors.destructive, textAlign: 'center' }}>Delete Account</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
 
         </ScrollView>
 
@@ -377,5 +398,6 @@ export default function AccountSheet({ visible, onClose }: Props) {
         </View>
       </SafeAreaView>
     </Modal>
+    </>
   );
 }

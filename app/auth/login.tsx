@@ -27,8 +27,11 @@ export default function LoginScreen() {
       const accessToken = url.searchParams.get('access_token') ?? new URLSearchParams(url.hash.slice(1)).get('access_token');
       const refreshToken = url.searchParams.get('refresh_token') ?? new URLSearchParams(url.hash.slice(1)).get('refresh_token');
       if (accessToken && refreshToken) {
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        router.replace('/(tabs)/browse');
+        const { data: { user } } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (user) {
+          const { data } = await supabase.from('users').select('user_id').eq('user_id', user.id).maybeSingle();
+          router.replace(data ? '/(tabs)/browse' : '/auth/create-username');
+        }
       }
     }
   };
