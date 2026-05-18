@@ -46,7 +46,7 @@ export default function TermsSheet({ visible, onClose }: Props) {
           <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 16 }}>Last updated May 17, 2026</Text>
 
           <Body>
-            {`These Terms and Conditions ("Terms") govern your use of Peace Alarm ("the App"), operated by Peace Alarm. By downloading or using the App, you agree to be bound by these Terms. If you do not agree, do not use the App.`}
+            {`These Terms and Conditions ("Terms") govern your use of Rooster Alarm ("the App"), operated by Rooster Alarm. By downloading or using the App, you agree to be bound by these Terms. If you do not agree, do not use the App.`}
           </Body>
 
           <Section title="1. USE OF THE APP" />
@@ -61,7 +61,7 @@ export default function TermsSheet({ visible, onClose }: Props) {
 
           <Section title="3. USER CONTENT" />
           <Body>
-            {`You may upload audio content ("User Content") to the App. By doing so, you grant Peace Alarm a non-exclusive, worldwide, royalty-free license to use, store, and display your User Content solely for the purpose of operating the App.\n\nYou represent that you own or have the necessary rights to upload your User Content, and that it does not violate any third-party rights or applicable laws.`}
+            {`You may upload audio content ("User Content") to the App. By doing so, you grant Rooster Alarm a non-exclusive, worldwide, royalty-free license to use, store, and display your User Content solely for the purpose of operating the App.\n\nYou represent that you own or have the necessary rights to upload your User Content, and that it does not violate any third-party rights or applicable laws.`}
           </Body>
 
           <Section title="4. PROHIBITED CONDUCT" />
@@ -71,12 +71,12 @@ export default function TermsSheet({ visible, onClose }: Props) {
 
           <Section title="5. INTELLECTUAL PROPERTY" />
           <Body>
-            {`All content, features, and functionality of the App — excluding User Content — are owned by Peace Alarm and protected by copyright, trademark, and other intellectual property laws. You may not copy, modify, distribute, or create derivative works without our express written permission.`}
+            {`All content, features, and functionality of the App — excluding User Content — are owned by Rooster Alarm and protected by copyright, trademark, and other intellectual property laws. You may not copy, modify, distribute, or create derivative works without our express written permission.`}
           </Body>
 
           <Section title="6. ALARMS AND NOTIFICATIONS" />
           <Body>
-            {`The App provides alarm scheduling features. Peace Alarm is not responsible for missed alarms or notifications due to device settings, operating system behavior, network issues, or any other factors outside our control. You are solely responsible for ensuring the App has the necessary permissions to function on your device.`}
+            {`The App provides alarm scheduling features. Rooster Alarm is not responsible for missed alarms or notifications due to device settings, operating system behavior, network issues, or any other factors outside our control. You are solely responsible for ensuring the App has the necessary permissions to function on your device.`}
           </Body>
 
           <Section title="7. THIRD-PARTY SERVICES" />
@@ -111,7 +111,7 @@ export default function TermsSheet({ visible, onClose }: Props) {
 
           <Section title="13. CONTACT US" />
           <Body>
-            {`Email: mattshade@roosteralarm.com\n\nMail:\nPeace Alarm\n923 N Washington St\nLowell, MI 49331\nUnited States`}
+            {`Email: mattshade@roosteralarm.com\n\nMail:\nRooster Alarm\n923 N Washington St\nLowell, MI 49331\nUnited States`}
           </Body>
         </ScrollView>
 

@@ -30,7 +30,7 @@ class AlarmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_HIDE_NOTIFICATION) {
-            Log.d("PeaceAlarm", "AlarmService: hiding notification (popup is showing)")
+            Log.d("RoosterAlarm", "AlarmService: hiding notification (popup is showing)")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
@@ -40,14 +40,14 @@ class AlarmService : Service() {
             return START_NOT_STICKY
         }
 
-        Log.d("PeaceAlarm", "AlarmService.onStartCommand fired!")
+        Log.d("RoosterAlarm", "AlarmService.onStartCommand fired!")
 
         val channelId = intent?.getStringExtra("channelId") ?: ""
         val channelName = intent?.getStringExtra("channelName") ?: "Alarm"
         val channelImageUrl = intent?.getStringExtra("channelImageUrl") ?: ""
         val alarmId = intent?.getStringExtra("alarmId") ?: "0"
 
-        Log.d("PeaceAlarm", "AlarmService: channelId=$channelId alarmId=$alarmId")
+        Log.d("RoosterAlarm", "AlarmService: channelId=$channelId alarmId=$alarmId")
 
         PendingAlarmData.set(channelId, channelName, channelImageUrl)
 
@@ -63,15 +63,53 @@ class AlarmService : Service() {
             val reactContext = (applicationContext as? MainApplication)
                 ?.reactNativeHost?.reactInstanceManager?.currentReactContext
             if (reactContext != null) {
+                val params = com.facebook.react.bridge.Arguments.createMap().apply {
+                    putString("channelId", channelId)
+                    putString("channelName", channelName)
+                    putString("channelImageUrl", channelImageUrl)
+                }
                 reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    ?.emit("PeaceAlarmFired", null)
+                    ?.emit("RoosterAlarmFired", params)
                 jsIsRunning = true
-                Log.d("PeaceAlarm", "AlarmService: emitted PeaceAlarmFired — JS is live, skipping service audio")
+                Log.d("RoosterAlarm", "AlarmService: emitted RoosterAlarmFired — JS is live, skipping service audio")
             } else {
-                Log.d("PeaceAlarm", "AlarmService: no React context — JS not running, service will play audio")
+                Log.d("RoosterAlarm", "AlarmService: no React context — JS not running, service will play audio")
             }
         } catch (e: Exception) {
-            Log.w("PeaceAlarm", "AlarmService: could not emit PeaceAlarmFired: ${e.message}")
+            Log.w("RoosterAlarm", "AlarmService: could not emit RoosterAlarmFired: ${e.message}")
+        }
+
+        // If JS wasn't live yet, retry emitting the event as the bridge wakes up.
+        // MainActivity's onNewIntent also retries, but this covers the case where the
+        // app is brought to foreground and bridge initialises while service is running.
+        if (!jsIsRunning) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                object : Runnable {
+                    var attempt = 0
+                    override fun run() {
+                        if (isDestroyed || attempt >= 20) return
+                        try {
+                            val rc = (applicationContext as? MainApplication)
+                                ?.reactNativeHost?.reactInstanceManager?.currentReactContext
+                            if (rc != null) {
+                                val p = com.facebook.react.bridge.Arguments.createMap().apply {
+                                    putString("channelId", channelId)
+                                    putString("channelName", channelName)
+                                    putString("channelImageUrl", channelImageUrl)
+                                }
+                                rc.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                                    ?.emit("RoosterAlarmFired", p)
+                                Log.d("RoosterAlarm", "AlarmService: deferred RoosterAlarmFired emitted (attempt $attempt)")
+                            } else {
+                                attempt++
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this, 250)
+                            }
+                        } catch (e: Exception) {
+                            Log.w("RoosterAlarm", "AlarmService: deferred emit error: ${e.message}")
+                        }
+                    }
+                }, 250
+            )
         }
 
         // SharedPreferences — persists even if JS hasn't loaded yet
@@ -80,7 +118,7 @@ class AlarmService : Service() {
             .putString("alarm_channel_name", channelName)
             .putString("alarm_channel_image_url", channelImageUrl)
             .apply()
-        Log.d("PeaceAlarm", "AlarmService: wrote alarm data to SharedPreferences")
+        Log.d("RoosterAlarm", "AlarmService: wrote alarm data to SharedPreferences")
 
         // Create notification channel (before startForeground — screen still OFF here)
         // v2: silent channel — audio is handled entirely by AlarmSoundManager (USAGE_ALARM)
@@ -107,6 +145,30 @@ class AlarmService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val dismissIntent = Intent(this, AlarmActionReceiver::class.java).apply {
+            action = AlarmActionReceiver.ACTION_DISMISS
+            putExtra("alarmId", alarmId)
+            putExtra("channelId", channelId)
+            putExtra("channelName", channelName)
+            putExtra("channelImageUrl", channelImageUrl)
+        }
+        val dismissPi = PendingIntent.getBroadcast(
+            this, "dismiss_$alarmId".hashCode(), dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val snoozeIntent = Intent(this, AlarmActionReceiver::class.java).apply {
+            action = AlarmActionReceiver.ACTION_SNOOZE
+            putExtra("alarmId", alarmId)
+            putExtra("channelId", channelId)
+            putExtra("channelName", channelName)
+            putExtra("channelImageUrl", channelImageUrl)
+        }
+        val snoozePi = PendingIntent.getBroadcast(
+            this, "snooze_$alarmId".hashCode(), snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val timeStr = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date())
         val notification = NotificationCompat.Builder(this, notifChannelId)
             .setSmallIcon(R.drawable.notification_icon)
@@ -119,23 +181,41 @@ class AlarmService : Service() {
             .setAutoCancel(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
+            .addAction(0, "Dismiss", dismissPi)
+            .addAction(0, "Snooze 5 min", snoozePi)
             .build()
 
         startForeground(alarmId.hashCode().let { if (it == 0) 1 else it }, notification)
-        Log.d("PeaceAlarm", "AlarmService: startForeground OK")
+        Log.d("RoosterAlarm", "AlarmService: startForeground OK")
+
+        // Launch MainActivity immediately from the foreground service — foreground services
+        // have an explicit Android exemption for background activity starts, so this fires
+        // without the ~3s throttle that AlarmReceiver (BroadcastReceiver) faces on Android 12+.
+        try {
+            val activityIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+                putExtra("alarmChannelId", channelId)
+                putExtra("alarmChannelName", channelName)
+                putExtra("alarmChannelImageUrl", channelImageUrl)
+            }
+            startActivity(activityIntent)
+            Log.d("RoosterAlarm", "AlarmService: startActivity from foreground service OK")
+        } catch (e: Exception) {
+            Log.w("RoosterAlarm", "AlarmService: startActivity failed: ${e.message}")
+        }
 
         // Acquire wakelock AFTER startForeground so screen is off when notification posts,
         // allowing fullScreenIntent to fire. ACQUIRE_CAUSES_WAKEUP then turns screen on.
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
             PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
-            "PeaceAlarm::AlarmWakeLock"
+            "RoosterAlarm::AlarmWakeLock"
         )
         wakeLock?.acquire(60000L)
 
         @Suppress("DEPRECATION")
         wifiLock = (getSystemService(WIFI_SERVICE) as WifiManager)
-            .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "PeaceAlarm::AlarmWifiLock")
+            .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "RoosterAlarm::AlarmWifiLock")
         wifiLock?.acquire()
 
         // If JS is live it will call playAlarmUrl via launch() — don't race it.
@@ -147,15 +227,15 @@ class AlarmService : Service() {
                 val audioUrl = fetchLatestAudioUrl(channelId)
                 if (isDestroyed) return@Thread
                 if (audioUrl != null) {
-                    Log.d("PeaceAlarm", "AlarmService: playing channel audio $audioUrl")
+                    Log.d("RoosterAlarm", "AlarmService: playing channel audio $audioUrl")
                     AlarmSoundManager.playUrl(this, audioUrl) {
                         if (!isDestroyed) {
-                            Log.w("PeaceAlarm", "AlarmService: stream error, falling back to $fallbackSound")
+                            Log.w("RoosterAlarm", "AlarmService: stream error, falling back to $fallbackSound")
                             AlarmSoundManager.playFallback(this, fallbackSound)
                         }
                     }
                 } else {
-                    Log.w("PeaceAlarm", "AlarmService: no audio URL, playing fallback $fallbackSound")
+                    Log.w("RoosterAlarm", "AlarmService: no audio URL, playing fallback $fallbackSound")
                     AlarmSoundManager.playFallback(this, fallbackSound)
                 }
             }.start()
@@ -172,7 +252,7 @@ class AlarmService : Service() {
         wifiLock = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
-        Log.d("PeaceAlarm", "AlarmService: onDestroy")
+        Log.d("RoosterAlarm", "AlarmService: onDestroy")
     }
 
     private fun fetchLatestAudioUrl(channelId: String): String? {
@@ -260,7 +340,7 @@ class AlarmService : Service() {
                 target
             }
         } catch (e: Exception) {
-            Log.e("PeaceAlarm", "AlarmService: fetchLatestAudioUrl failed: ${e.message}")
+            Log.e("RoosterAlarm", "AlarmService: fetchLatestAudioUrl failed: ${e.message}")
             null
         }
     }

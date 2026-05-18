@@ -374,7 +374,7 @@ async function fetchAudioMeta(channelId: string, userId?: string): Promise<Audio
     const localOverrides: Record<string, 'newest' | 'oldest'> = localRaw ? JSON.parse(localRaw) : {};
     listeningOrder = localOverrides[channelId] ?? channelDefault;
   }
-  console.log('[fetchAudioMeta] channelId:', channelId, 'listeningOrder:', listeningOrder, 'override:', overrides[channelId] ?? 'none');
+  console.log('[fetchAudioMeta] channelId:', channelId, 'listeningOrder:', listeningOrder);
   const now = new Date().toISOString();
 
   let audioId: string;

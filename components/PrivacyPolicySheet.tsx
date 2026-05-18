@@ -46,7 +46,7 @@ export default function PrivacyPolicySheet({ visible, onClose }: Props) {
           <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 16 }}>Last updated May 10, 2026</Text>
 
           <Body>
-            {`This Privacy Notice for Peace Alarm ("we," "us," or "our") describes how and why we might access, collect, store, use, and/or share your personal information when you use our services, including when you download and use our mobile application Peace Alarm, or engage with us in other related ways.\n\nQuestions or concerns? Contact us at mattshade@roosteralarm.com.`}
+            {`This Privacy Notice for Rooster Alarm ("we," "us," or "our") describes how and why we might access, collect, store, use, and/or share your personal information when you use our services, including when you download and use our mobile application Rooster Alarm, or engage with us in other related ways.\n\nQuestions or concerns? Contact us at mattshade@roosteralarm.com.`}
           </Body>
 
           <Section title="SUMMARY OF KEY POINTS" />
@@ -126,7 +126,7 @@ export default function PrivacyPolicySheet({ visible, onClose }: Props) {
 
           <Section title="15. HOW CAN YOU CONTACT US?" />
           <Body>
-            {`Email: mattshade@roosteralarm.com\n\nMail:\nPeace Alarm\n923 N Washington St\nLowell, MI 49331\nUnited States`}
+            {`Email: mattshade@roosteralarm.com\n\nMail:\nRooster Alarm\n923 N Washington St\nLowell, MI 49331\nUnited States`}
           </Body>
 
           <Section title="16. HOW CAN YOU REVIEW, UPDATE, OR DELETE YOUR DATA?" />

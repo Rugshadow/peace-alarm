@@ -18,14 +18,14 @@ class MainActivity : ReactActivity() {
     setTheme(R.style.AppTheme)
     val hasExtra = intent?.hasExtra("alarmChannelId") == true
     val prefChannelId = getSharedPreferences("peace_alarm_prefs", MODE_PRIVATE).getString("alarm_channel_id", null)
-    android.util.Log.d("PeaceAlarm", "MainActivity.onCreate hasExtra=$hasExtra prefChannelId=$prefChannelId")
+    android.util.Log.d("RoosterAlarm", "MainActivity.onCreate hasExtra=$hasExtra prefChannelId=$prefChannelId")
     val hasAlarm = hasExtra || prefChannelId != null
     if (hasAlarm) {
-      android.util.Log.d("PeaceAlarm", "MainActivity.onCreate: calling showOnLockScreen()")
+      android.util.Log.d("RoosterAlarm", "MainActivity.onCreate: calling showOnLockScreen()")
       showOnLockScreen()
       hideAlarmNotification()
     } else {
-      android.util.Log.d("PeaceAlarm", "MainActivity.onCreate: no alarm, skipping showOnLockScreen()")
+      android.util.Log.d("RoosterAlarm", "MainActivity.onCreate: no alarm, skipping showOnLockScreen()")
     }
     super.onCreate(null)
   }
@@ -36,12 +36,12 @@ class MainActivity : ReactActivity() {
         action = AlarmService.ACTION_HIDE_NOTIFICATION
       })
     } catch (e: Exception) {
-      android.util.Log.w("PeaceAlarm", "hideAlarmNotification failed: ${e.message}")
+      android.util.Log.w("RoosterAlarm", "hideAlarmNotification failed: ${e.message}")
     }
   }
 
   private fun showOnLockScreen() {
-    android.util.Log.d("PeaceAlarm", "MainActivity.showOnLockScreen() called, SDK=${Build.VERSION.SDK_INT}")
+    android.util.Log.d("RoosterAlarm", "MainActivity.showOnLockScreen() called, SDK=${Build.VERSION.SDK_INT}")
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
       setShowWhenLocked(true)
       setTurnScreenOn(true)
@@ -52,7 +52,7 @@ class MainActivity : ReactActivity() {
       WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
       WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
     )
-    android.util.Log.d("PeaceAlarm", "MainActivity.showOnLockScreen() done")
+    android.util.Log.d("RoosterAlarm", "MainActivity.showOnLockScreen() done")
   }
 
   /**
@@ -66,15 +66,44 @@ class MainActivity : ReactActivity() {
     setIntent(intent)
     val hasAlarm = intent.hasExtra("alarmChannelId") ||
       getSharedPreferences("peace_alarm_prefs", MODE_PRIVATE).getString("alarm_channel_id", null) != null
-    if (hasAlarm) { showOnLockScreen(); hideAlarmNotification() }
+    if (hasAlarm) { showOnLockScreen(); hideAlarmNotification(); tryEmitAlarmFired() }
+  }
+
+  private fun tryEmitAlarmFired(attempt: Int = 0) {
     try {
       val reactContext = (applicationContext as? MainApplication)
         ?.reactNativeHost?.reactInstanceManager?.currentReactContext
-      reactContext?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-        ?.emit("PeaceAlarmFired", null)
-      android.util.Log.d("PeaceAlarm", "onNewIntent: emitted PeaceAlarmFired reactContext=${reactContext != null}")
+      if (reactContext != null) {
+        val prefs = getSharedPreferences("peace_alarm_prefs", MODE_PRIVATE)
+        val channelId = intent?.getStringExtra("alarmChannelId")
+          ?: prefs.getString("alarm_channel_id", null)
+          ?: PendingAlarmData.channelId
+        if (channelId.isNullOrEmpty()) {
+          android.util.Log.w("RoosterAlarm", "tryEmitAlarmFired: no channelId found, skipping emit")
+          return
+        }
+        val channelName = intent?.getStringExtra("alarmChannelName")
+          ?: prefs.getString("alarm_channel_name", "Alarm") ?: "Alarm"
+        val channelImageUrl = intent?.getStringExtra("alarmChannelImageUrl")
+          ?: prefs.getString("alarm_channel_image_url", "") ?: ""
+        val params = com.facebook.react.bridge.Arguments.createMap().apply {
+          putString("channelId", channelId)
+          putString("channelName", channelName)
+          putString("channelImageUrl", channelImageUrl)
+        }
+        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+          ?.emit("RoosterAlarmFired", params)
+        android.util.Log.d("RoosterAlarm", "tryEmitAlarmFired: emitted channelId=$channelId on attempt $attempt")
+      } else if (attempt < 20) {
+        android.util.Log.d("RoosterAlarm", "tryEmitAlarmFired: reactContext null, retrying (attempt $attempt)")
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+          tryEmitAlarmFired(attempt + 1)
+        }, 250)
+      } else {
+        android.util.Log.w("RoosterAlarm", "tryEmitAlarmFired: gave up after $attempt attempts")
+      }
     } catch (e: Exception) {
-      android.util.Log.e("PeaceAlarm", "onNewIntent: could not emit PeaceAlarmFired: ${e.message}")
+      android.util.Log.e("RoosterAlarm", "tryEmitAlarmFired: error: ${e.message}")
     }
   }
 

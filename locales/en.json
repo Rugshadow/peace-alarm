@@ -244,9 +244,9 @@
     "vi": "Vietnamese"
   },
   "welcome": {
-    "title": "Welcome to Peace Alarm!",
-    "body1": "Browse alarm channels and schedule your morning alarm, then wake up each morning to daily curated news, comedy, music, you name it!",
-    "body2": "Or go to the Create page and record or upload your own alarm content, like your own mini podcast for others to hear first thing in the day.",
-    "continue": "Continue to Peace Alarm"
+    "title": "Welcome to Rooster Alarm!",
+    "body1": "Here you can browse alarm 'channels', waking up to a new alarm every day. There's news, comedy, music, ambient sounds, and much more.",
+    "body2": "Or turn on creator mode to record your own alarm channels, like a mini podcast for others to hear first thing in the day.",
+    "continue": "Continue to Rooster Alarm"
   }
 }

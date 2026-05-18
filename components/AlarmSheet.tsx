@@ -10,6 +10,7 @@ import {
   NativeScrollEvent,
   Image,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Text } from './Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -307,6 +308,9 @@ function ChannelPickerModal({
 
   // "All" browse layout — only when not searching
   const topChannels = [...allChannels].sort((a, b) => a.name.localeCompare(b.name));
+  const { width } = useWindowDimensions();
+  const gridItemWidth = (width - 32 - 32) / 3;
+
   const genres = PICKER_GENRES.filter((g) => allChannels.some((c) => c.genre === g));
   const genreSections = genres.map((g) => ({
     title: t(`genres.${g.toLowerCase()}`),
@@ -314,7 +318,7 @@ function ChannelPickerModal({
   }));
 
   const renderGridItem = ({ item }: { item: Channel }) => (
-    <TouchableOpacity className="flex-1 items-center" onPress={() => handleSelect(item)}>
+    <TouchableOpacity style={{ width: gridItemWidth, alignItems: 'center' }} onPress={() => handleSelect(item)}>
       <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
       <Text className="text-[11px] mt-2 text-center" style={{ color: textSecondary }} numberOfLines={2}>{item.name}</Text>
     </TouchableOpacity>
@@ -403,7 +407,7 @@ function ChannelPickerModal({
               keyExtractor={(item) => item.id}
               numColumns={3}
               contentContainerStyle={{ padding: 16, gap: 16 }}
-              columnWrapperStyle={{ gap: 16 }}
+              columnWrapperStyle={{ gap: 16, justifyContent: 'flex-start' }}
               renderItem={renderGridItem}
             />
           )

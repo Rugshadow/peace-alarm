@@ -127,16 +127,16 @@ export default function SignupScreen() {
           </TouchableOpacity>
 
           <Text className="text-text-secondary text-[13px] text-center mb-8">
-            {"By creating an account, you are agreeing to Peace Alarm's "}
+            {"By creating an account, you are agreeing to Rooster Alarm's "}
             <Text
-              style={{ color: Colors.primary, textDecorationLine: 'underline' }}
+              style={{ color: '#111111', textDecorationLine: 'underline' }}
               onPress={() => setPrivacyVisible(true)}
             >
               privacy policy
             </Text>
             {' and '}
             <Text
-              style={{ color: Colors.primary, textDecorationLine: 'underline' }}
+              style={{ color: '#111111', textDecorationLine: 'underline' }}
               onPress={() => setTermsVisible(true)}
             >
               terms and conditions

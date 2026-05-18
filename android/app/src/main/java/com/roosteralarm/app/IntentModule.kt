@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.provider.Settings
 import com.facebook.react.bridge.*
 
 class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
@@ -73,6 +74,25 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     }
 
     @ReactMethod
+    fun canDrawOverlays(promise: Promise) {
+        promise.resolve(Settings.canDrawOverlays(reactApplicationContext))
+    }
+
+    @ReactMethod
+    fun openOverlaySettings(promise: Promise) {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                data = Uri.parse("package:${reactApplicationContext.packageName}")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            reactApplicationContext.startActivity(intent)
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
     fun isIgnoringBatteryOptimizations(promise: Promise) {
         val pm = reactApplicationContext.getSystemService(PowerManager::class.java)
         promise.resolve(pm.isIgnoringBatteryOptimizations(reactApplicationContext.packageName))
@@ -134,26 +154,26 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
 
     @ReactMethod
     fun playAlarmUrl(url: String, promise: Promise) {
-        android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl called url=$url")
+        android.util.Log.d("RoosterAlarm", "IntentModule.playAlarmUrl called url=$url")
         Thread {
-            android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl thread started")
+            android.util.Log.d("RoosterAlarm", "IntentModule.playAlarmUrl thread started")
             try {
                 AlarmSoundManager.playUrlForeground(reactApplicationContext, url) {
-                    android.util.Log.w("PeaceAlarm", "IntentModule.playAlarmUrl: onError callback, falling back")
+                    android.util.Log.w("RoosterAlarm", "IntentModule.playAlarmUrl: onError callback, falling back")
                     AlarmSoundManager.playFallback(reactApplicationContext)
                 }
-                android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl: playUrlForeground returned")
+                android.util.Log.d("RoosterAlarm", "IntentModule.playAlarmUrl: playUrlForeground returned")
             } catch (e: Exception) {
-                android.util.Log.e("PeaceAlarm", "IntentModule.playAlarmUrl thread exception: ${e.message}", e)
+                android.util.Log.e("RoosterAlarm", "IntentModule.playAlarmUrl thread exception: ${e.message}", e)
             }
             promise.resolve(null)
         }.start()
-        android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmUrl thread launched")
+        android.util.Log.d("RoosterAlarm", "IntentModule.playAlarmUrl thread launched")
     }
 
     @ReactMethod
     fun playAlarmFallback(promise: Promise) {
-        android.util.Log.d("PeaceAlarm", "IntentModule.playAlarmFallback called")
+        android.util.Log.d("RoosterAlarm", "IntentModule.playAlarmFallback called")
         val soundName = reactApplicationContext
             .getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
             .getString("fallback_sound", "alarm") ?: "alarm"
@@ -161,7 +181,7 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
             try {
                 AlarmSoundManager.playFallback(reactApplicationContext, soundName)
             } catch (e: Exception) {
-                android.util.Log.e("PeaceAlarm", "IntentModule.playAlarmFallback exception: ${e.message}", e)
+                android.util.Log.e("RoosterAlarm", "IntentModule.playAlarmFallback exception: ${e.message}", e)
             }
             promise.resolve(null)
         }.start()
@@ -171,7 +191,7 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     fun getAlarmData(promise: Promise) {
         val activity = getCurrentActivity()
         val extras: Bundle? = activity?.intent?.extras
-        android.util.Log.d("PeaceAlarm", "getAlarmData: activity=${activity?.javaClass?.simpleName} hasExtra=${extras?.containsKey("alarmChannelId")} pendingId=${PendingAlarmData.channelId}")
+        android.util.Log.d("RoosterAlarm", "getAlarmData: activity=${activity?.javaClass?.simpleName} hasExtra=${extras?.containsKey("alarmChannelId")} pendingId=${PendingAlarmData.channelId}")
 
         // 1. Activity intent extras (startActivity path)
         if (extras != null && extras.containsKey("alarmChannelId")) {
@@ -201,7 +221,7 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         // 3. SharedPreferences — survives process restart and JS load delay
         val prefs = reactApplicationContext.getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
         val channelId = prefs.getString("alarm_channel_id", null)
-        android.util.Log.d("PeaceAlarm", "getAlarmData: SharedPreferences channelId=$channelId")
+        android.util.Log.d("RoosterAlarm", "getAlarmData: SharedPreferences channelId=$channelId")
         if (channelId != null) {
             val map = Arguments.createMap().apply {
                 putString("channelId", channelId)

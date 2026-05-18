@@ -50,7 +50,7 @@ export default function LoginScreen() {
           style={{ width: 96, height: 96, borderRadius: 24, marginBottom: 24 }}
           resizeMode="cover"
         />
-        <Text className="text-[28px] font-bold text-text-primary mb-1">Peace Alarm</Text>
+        <Text className="text-[28px] font-bold text-text-primary mb-1">Rooster Alarm</Text>
         <Text className="text-text-secondary text-[15px] mb-10">{t('auth.app_tagline')}</Text>
 
         <TouchableOpacity onPress={handleGoogleLogin} className="w-full flex-row items-center justify-center gap-3 bg-surface rounded-2xl py-4 mb-3">

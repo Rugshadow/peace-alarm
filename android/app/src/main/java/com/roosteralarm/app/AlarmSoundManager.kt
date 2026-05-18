@@ -21,14 +21,14 @@ object AlarmSoundManager {
 
     @Synchronized fun stop() {
         val trace = Log.getStackTraceString(Throwable()).lines().take(8).joinToString("\n")
-        Log.d("PeaceAlarm", "AlarmSoundManager.stop() called, player=${player != null}\n$trace")
+        Log.d("RoosterAlarm", "AlarmSoundManager.stop() called, player=${player != null}\n$trace")
         player?.apply {
             try {
                 setOnPreparedListener(null)
                 setOnErrorListener(null)
                 setOnCompletionListener(null)
                 if (isPlaying) stop()
-            } catch (e: Exception) { Log.e("PeaceAlarm", "AlarmSoundManager.stop error: ${e.message}") }
+            } catch (e: Exception) { Log.e("RoosterAlarm", "AlarmSoundManager.stop error: ${e.message}") }
             release()
         }
         player = null
@@ -36,7 +36,7 @@ object AlarmSoundManager {
 
     // Called from IntentModule (app in foreground) — USAGE_MEDIA so setVolume() is honoured
     @Synchronized fun playUrlForeground(context: Context, url: String, onError: () -> Unit) {
-        Log.d("PeaceAlarm", "AlarmSoundManager.playUrlForeground() url=$url volume=$alarmVolume")
+        Log.d("RoosterAlarm", "AlarmSoundManager.playUrlForeground() url=$url volume=$alarmVolume")
         stop()
         try {
             // Set media stream to max so mp.setVolume() scales across the full range
@@ -45,7 +45,7 @@ object AlarmSoundManager {
                 val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 am.setStreamVolume(AudioManager.STREAM_MUSIC, max, 0)
             } catch (e: Exception) {
-                Log.w("PeaceAlarm", "playUrlForeground: could not set stream volume: ${e.message}")
+                Log.w("RoosterAlarm", "playUrlForeground: could not set stream volume: ${e.message}")
             }
             requestAudioFocus(context)
             val vol = alarmVolume
@@ -59,26 +59,26 @@ object AlarmSoundManager {
             mp.setDataSource(url)
             mp.isLooping = true
             mp.setOnErrorListener { _, what, extra ->
-                Log.e("PeaceAlarm", "AlarmSoundManager: MediaPlayer error what=$what extra=$extra")
+                Log.e("RoosterAlarm", "AlarmSoundManager: MediaPlayer error what=$what extra=$extra")
                 onError()
                 true
             }
             mp.setOnPreparedListener {
                 it.setVolume(curveVolume(vol), curveVolume(vol))
-                Log.d("PeaceAlarm", "AlarmSoundManager: onPrepared start() vol=$vol")
+                Log.d("RoosterAlarm", "AlarmSoundManager: onPrepared start() vol=$vol")
                 it.start()
             }
             mp.prepareAsync()
             player = mp
         } catch (e: Exception) {
-            Log.e("PeaceAlarm", "AlarmSoundManager.playUrlForeground exception: ${e.message}", e)
+            Log.e("RoosterAlarm", "AlarmSoundManager.playUrlForeground exception: ${e.message}", e)
             onError()
         }
     }
 
     // Called from AlarmService (background) — USAGE_ALARM for lock screen / DND bypass
     @Synchronized fun playUrl(context: Context, url: String, onError: () -> Unit) {
-        Log.d("PeaceAlarm", "AlarmSoundManager.playUrl() url=$url volume=$alarmVolume")
+        Log.d("RoosterAlarm", "AlarmSoundManager.playUrl() url=$url volume=$alarmVolume")
         stop()
         try {
             requestAudioFocus(context)
@@ -93,25 +93,25 @@ object AlarmSoundManager {
             mp.setDataSource(url)
             mp.isLooping = true
             mp.setOnErrorListener { _, what, extra ->
-                Log.e("PeaceAlarm", "AlarmSoundManager: MediaPlayer error what=$what extra=$extra")
+                Log.e("RoosterAlarm", "AlarmSoundManager: MediaPlayer error what=$what extra=$extra")
                 onError()
                 true
             }
             mp.setOnPreparedListener {
                 it.setVolume(curveVolume(vol), curveVolume(vol))
-                Log.d("PeaceAlarm", "AlarmSoundManager: onPrepared start() vol=$vol")
+                Log.d("RoosterAlarm", "AlarmSoundManager: onPrepared start() vol=$vol")
                 it.start()
             }
             mp.prepareAsync()
             player = mp
         } catch (e: Exception) {
-            Log.e("PeaceAlarm", "AlarmSoundManager.playUrl exception: ${e.message}", e)
+            Log.e("RoosterAlarm", "AlarmSoundManager.playUrl exception: ${e.message}", e)
             onError()
         }
     }
 
     @Synchronized fun playFallback(context: Context, soundName: String = "alarm") {
-        Log.d("PeaceAlarm", "AlarmSoundManager.playFallback() sound=$soundName volume=$alarmVolume")
+        Log.d("RoosterAlarm", "AlarmSoundManager.playFallback() sound=$soundName volume=$alarmVolume")
         stop()
         try {
             requestAudioFocus(context)
@@ -131,10 +131,10 @@ object AlarmSoundManager {
             mp.setOnPreparedListener { it.setVolume(curveVolume(vol), curveVolume(vol)); it.start() }
             mp.prepare()
             mp.start()
-            Log.d("PeaceAlarm", "AlarmSoundManager: fallback started vol=$vol")
+            Log.d("RoosterAlarm", "AlarmSoundManager: fallback started vol=$vol")
             player = mp
         } catch (e: Exception) {
-            Log.e("PeaceAlarm", "AlarmSoundManager.playFallback exception: ${e.message}", e)
+            Log.e("RoosterAlarm", "AlarmSoundManager.playFallback exception: ${e.message}", e)
         }
     }
 
@@ -150,12 +150,12 @@ object AlarmSoundManager {
                 .setAcceptsDelayedFocusGain(false)
                 .build()
             val result = am.requestAudioFocus(req)
-            Log.d("PeaceAlarm", "AlarmSoundManager: requestAudioFocus result=$result")
+            Log.d("RoosterAlarm", "AlarmSoundManager: requestAudioFocus result=$result")
             focusRequest = req
         } else {
             @Suppress("DEPRECATION")
             val result = am.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN)
-            Log.d("PeaceAlarm", "AlarmSoundManager: requestAudioFocus (legacy) result=$result")
+            Log.d("RoosterAlarm", "AlarmSoundManager: requestAudioFocus (legacy) result=$result")
         }
     }
 }

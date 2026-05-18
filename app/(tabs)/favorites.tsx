@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View,FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, FlatList, TouchableOpacity, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Text } from '../../components/Text';
 import AppAlert from '../../components/AppAlert';
 import { useAppAlert } from '../../hooks/useAppAlert';
@@ -22,6 +22,8 @@ type Tab = 'channels' | 'clips';
 type FavoriteClip = AudioClip & { channelName: string; channelId: string; imageUrl?: string };
 
 export default function FavoritesScreen() {
+  const { width } = useWindowDimensions();
+  const itemWidth = (width - 32 - 32) / 3; // padding 16 each side, gap 16 × 2
   const { isLoggedIn, session } = useAuth();
   const { bg } = useTheme();
   const { t } = useTranslation();
@@ -216,9 +218,9 @@ export default function FavoritesScreen() {
             keyExtractor={(item) => item.id}
             numColumns={3}
             contentContainerStyle={{ padding: 16, gap: 16 }}
-            columnWrapperStyle={{ gap: 16 }}
+            columnWrapperStyle={{ gap: 16, justifyContent: 'flex-start' }}
             renderItem={({ item }) => (
-              <TouchableOpacity className="flex-1 items-center" onPress={() => { setSelectedChannel(item); setSheetVisible(true); }}>
+              <TouchableOpacity style={{ width: itemWidth, alignItems: 'center' }} onPress={() => { setSelectedChannel(item); setSheetVisible(true); }}>
                 <ChannelAvatar id={item.id} name={item.name} size="carousel" imageUrl={item.imageUrl} />
                 <Text className="text-[12px] text-text-secondary mt-2 text-center" numberOfLines={2}>
                   {item.name}
