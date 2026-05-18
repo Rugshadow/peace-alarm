@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, Animated, Modal } from 'react-native';
+import { View,TouchableOpacity, Image, Animated, Modal } from 'react-native';
+import { Text } from '../../components/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
@@ -12,9 +13,8 @@ import AccountSheet from '../../components/AccountSheet';
 import WelcomeModal from '../../components/WelcomeModal';
 
 function Header({ routeName }: { routeName: string }) {
-  const { isLoggedIn, username } = useAuth();
+  const { username, isLoggedIn } = useAuth();
   const { t } = useTranslation();
-  const router = useRouter();
   const [showAccount, setShowAccount] = useState(false);
   const ringAnim = useRef(new Animated.Value(0)).current;
 
@@ -45,11 +45,11 @@ function Header({ routeName }: { routeName: string }) {
 
   return (
     <>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#3a3a3a' }}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.primary }}>
         <View className="flex-row items-center px-4 pb-2" style={{ height: 44 }}>
           <TouchableOpacity onPress={ringLogo} activeOpacity={1} style={{ width: 40 }}>
             <Animated.Image
-              source={require('../../assets/Peace Alarm Icon dark.png')}
+              source={require('../../assets/Rooster Alarm Corner.png')}
               style={{ width: 36, height: 36, borderRadius: 8, transform: [{ rotate }] }}
               resizeMode="contain"
             />
@@ -57,25 +57,20 @@ function Header({ routeName }: { routeName: string }) {
 
           <Text
             className="text-[17px] font-semibold text-center"
-            style={{ flex: 1, color: '#ffffff' }}
+            style={{ flex: 1, color: '#3a3a3a' }}
             numberOfLines={1}
           >
             {title}
           </Text>
 
-          {isLoggedIn ? (
-            <TouchableOpacity onPress={() => setShowAccount(true)} style={{ width: 40, alignItems: 'flex-end' }}>
-              <Ionicons name="person-circle" size={34} color={Colors.primary} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => router.push('/auth/login')}
-              className="rounded-full px-4 py-1.5"
-              style={{ backgroundColor: Colors.primary }}
-            >
-              <Text className="font-semibold text-[14px] text-text-primary">{t('common.log_in')}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={() => setShowAccount(true)} style={{ width: 40, alignItems: 'flex-end' }}>
+            <View style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="person-circle" size={34} color="#3a3a3a" />
+              {!isLoggedIn && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 100, borderWidth: 1.5, borderColor: '#FF4444', pointerEvents: 'none' }} />
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
       <AccountSheet visible={showAccount} onClose={() => setShowAccount(false)} />
@@ -134,11 +129,11 @@ export default function TabLayout() {
         header: () => {
           return <Header routeName={route.name} />;
         },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#ffffff',
+        tabBarActiveTintColor: '#3a3a3a',
+        tabBarInactiveTintColor: '#888888',
         tabBarStyle: {
-          backgroundColor: '#3a3a3a',
-          borderTopColor: '#3a3a3a',
+          backgroundColor: Colors.primary,
+          borderTopColor: Colors.primary,
           paddingBottom: 12,
           height: 64,
         },

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, Pressable, PanResponder } from 'react-native';
+import { View,Modal, TouchableOpacity, Pressable, PanResponder } from 'react-native';
+import { Text } from './Text';
 import AppAlert from './AppAlert';
 import { useAppAlert } from '../hooks/useAppAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';

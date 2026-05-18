@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   Image,
   TextInput,
   TouchableOpacity,
@@ -9,7 +8,9 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { Text } from '../../components/Text';
 import PrivacyPolicySheet from '../../components/PrivacyPolicySheet';
+import TermsSheet from '../../components/TermsSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
@@ -26,6 +27,7 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [privacyVisible, setPrivacyVisible] = useState(false);
+  const [termsVisible, setTermsVisible] = useState(false);
 
   const handleSignup = async () => {
     if (!email || !username || !password) return;
@@ -125,13 +127,21 @@ export default function SignupScreen() {
           </TouchableOpacity>
 
           <Text className="text-text-secondary text-[13px] text-center mb-8">
-            {t('auth.agree_prefix')}{' '}
+            {"By creating an account, you are agreeing to Peace Alarm's "}
             <Text
               style={{ color: Colors.primary, textDecorationLine: 'underline' }}
               onPress={() => setPrivacyVisible(true)}
             >
-              {t('common.privacy_policy')}
+              privacy policy
             </Text>
+            {' and '}
+            <Text
+              style={{ color: Colors.primary, textDecorationLine: 'underline' }}
+              onPress={() => setTermsVisible(true)}
+            >
+              terms and conditions
+            </Text>
+            {'.'}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -148,6 +158,7 @@ export default function SignupScreen() {
       </View>
 
       <PrivacyPolicySheet visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
+      <TermsSheet visible={termsVisible} onClose={() => setTermsVisible(false)} />
     </SafeAreaView>
   );
 }

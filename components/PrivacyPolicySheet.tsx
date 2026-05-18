@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Modal, ScrollView, TouchableOpacity } from 'react-native';
+import { View,Modal, ScrollView, TouchableOpacity } from 'react-native';
+import { Text } from './Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
@@ -45,7 +46,7 @@ export default function PrivacyPolicySheet({ visible, onClose }: Props) {
           <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 16 }}>Last updated May 10, 2026</Text>
 
           <Body>
-            {`This Privacy Notice for Peace Alarm ("we," "us," or "our") describes how and why we might access, collect, store, use, and/or share your personal information when you use our services, including when you download and use our mobile application Peace Alarm, or engage with us in other related ways.\n\nQuestions or concerns? Contact us at mattshade@peacealarm.com.`}
+            {`This Privacy Notice for Peace Alarm ("we," "us," or "our") describes how and why we might access, collect, store, use, and/or share your personal information when you use our services, including when you download and use our mobile application Peace Alarm, or engage with us in other related ways.\n\nQuestions or concerns? Contact us at mattshade@roosteralarm.com.`}
           </Body>
 
           <Section title="SUMMARY OF KEY POINTS" />
@@ -95,12 +96,12 @@ export default function PrivacyPolicySheet({ visible, onClose }: Props) {
 
           <Section title="9. DO WE COLLECT INFORMATION FROM MINORS?" />
           <Body>
-            {`We do not knowingly collect data from or market to children under 18. By using the services, you represent that you are at least 18 years old. If we learn that we have collected data from a minor, we will deactivate the account and delete the data. Contact us at mattshade@peacealarm.com if you believe we have collected data from a minor.`}
+            {`We do not knowingly collect data from or market to children under 18. By using the services, you represent that you are at least 18 years old. If we learn that we have collected data from a minor, we will deactivate the account and delete the data. Contact us at mattshade@roosteralarm.com if you believe we have collected data from a minor.`}
           </Body>
 
           <Section title="10. WHAT ARE YOUR PRIVACY RIGHTS?" />
           <Body>
-            {`Depending on your location, you may have rights to:\n• Access and obtain a copy of your personal information\n• Correct inaccuracies\n• Request deletion\n• Restrict or object to processing\n• Data portability\n\nTo exercise these rights, submit a data subject access request or email us at mattshade@peacealarm.com.\n\nYou may withdraw your consent at any time by contacting us. To terminate your account, log in to your account settings.`}
+            {`Depending on your location, you may have rights to:\n• Access and obtain a copy of your personal information\n• Correct inaccuracies\n• Request deletion\n• Restrict or object to processing\n• Data portability\n\nTo exercise these rights, submit a data subject access request or email us at mattshade@roosteralarm.com.\n\nYou may withdraw your consent at any time by contacting us. To terminate your account, log in to your account settings.`}
           </Body>
 
           <Section title="11. CONTROLS FOR DO-NOT-TRACK FEATURES" />
@@ -110,7 +111,7 @@ export default function PrivacyPolicySheet({ visible, onClose }: Props) {
 
           <Section title="12. DO UNITED STATES RESIDENTS HAVE SPECIFIC PRIVACY RIGHTS?" />
           <Body>
-            {`Residents of California, Colorado, Connecticut, and other US states may have the right to:\n• Know whether we process your personal data\n• Access, correct, or delete your personal data\n• Opt out of sale or sharing of personal data\n• Non-discrimination for exercising your rights\n\nWe have not sold or shared any personal information in the past 12 months and will not do so in the future.\n\nTo exercise your rights, email mattshade@peacealarm.com or visit peacealarm.com.`}
+            {`Residents of California, Colorado, Connecticut, and other US states may have the right to:\n• Know whether we process your personal data\n• Access, correct, or delete your personal data\n• Opt out of sale or sharing of personal data\n• Non-discrimination for exercising your rights\n\nWe have not sold or shared any personal information in the past 12 months and will not do so in the future.\n\nTo exercise your rights, email mattshade@roosteralarm.com or visit peacealarm.com.`}
           </Body>
 
           <Section title="13. DO OTHER REGIONS HAVE SPECIFIC PRIVACY RIGHTS?" />
@@ -125,12 +126,12 @@ export default function PrivacyPolicySheet({ visible, onClose }: Props) {
 
           <Section title="15. HOW CAN YOU CONTACT US?" />
           <Body>
-            {`Email: mattshade@peacealarm.com\n\nMail:\nPeace Alarm\n923 N Washington St\nLowell, MI 49331\nUnited States`}
+            {`Email: mattshade@roosteralarm.com\n\nMail:\nPeace Alarm\n923 N Washington St\nLowell, MI 49331\nUnited States`}
           </Body>
 
           <Section title="16. HOW CAN YOU REVIEW, UPDATE, OR DELETE YOUR DATA?" />
           <Body>
-            {`You may submit a data subject access request or contact us at mattshade@peacealarm.com to review, update, or delete your personal information.`}
+            {`You may submit a data subject access request or contact us at mattshade@roosteralarm.com to review, update, or delete your personal information.`}
           </Body>
 
           <Text style={{ fontSize: 12, color: textSecondary, marginTop: 24, textAlign: 'center' }}>

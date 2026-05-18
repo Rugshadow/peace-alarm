@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Modal } from 'react-native';
+import { View,FlatList, TouchableOpacity, Image, ActivityIndicator, Modal } from 'react-native';
+import { Text } from '../../components/Text';
 import AppAlert from '../../components/AppAlert';
 import { useAppAlert } from '../../hooks/useAppAlert';
 import { Ionicons } from '@expo/vector-icons';

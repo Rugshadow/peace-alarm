@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
-  Text,
   Modal,
   TouchableOpacity,
   ActivityIndicator,
@@ -9,8 +8,10 @@ import {
   FlatList,
   NativeModules,
 } from 'react-native';
+import { Text } from './Text';
 import AppAlert from './AppAlert';
 import PrivacyPolicySheet from './PrivacyPolicySheet';
+import TermsSheet from './TermsSheet';
 import { useAppAlert } from '../hooks/useAppAlert';
 
 const { IntentData } = NativeModules;
@@ -32,6 +33,7 @@ import { useAudioPlayer } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import { useAlarmsContext } from '../contexts/AlarmsContext';
@@ -44,7 +46,8 @@ type Props = {
 };
 
 export default function AccountSheet({ visible, onClose }: Props) {
-  const { signOut, username, session, timeFormat, setTimeFormat, colorScheme, setColorScheme, alarmVolume, setAlarmVolume, creatorMode, setCreatorMode, language, setLanguage } = useAuth();
+  const router = useRouter();
+  const { signOut, username, session, isLoggedIn, timeFormat, setTimeFormat, colorScheme, setColorScheme, alarmVolume, setAlarmVolume, creatorMode, setCreatorMode, language, setLanguage } = useAuth();
   const { bg, surface, text, textSecondary } = useTheme();
   const { t } = useTranslation();
   const { alarms, clearAllAlarms } = useAlarmsContext();
@@ -61,6 +64,7 @@ export default function AccountSheet({ visible, onClose }: Props) {
   const [previewingSound, setPreviewingSound] = useState<string | null>(null);
   const [fallbackExpanded, setFallbackExpanded] = useState(false);
   const [privacyVisible, setPrivacyVisible] = useState(false);
+  const [termsVisible, setTermsVisible] = useState(false);
   const [accountExpanded, setAccountExpanded] = useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
 
@@ -195,6 +199,7 @@ export default function AccountSheet({ visible, onClose }: Props) {
   return (
     <>
     <PrivacyPolicySheet visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
+    <TermsSheet visible={termsVisible} onClose={() => setTermsVisible(false)} />
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <AppAlert {...alertProps} />
       <SafeAreaView className="flex-1" style={{ backgroundColor: bg }} edges={['left', 'right']}>
@@ -207,6 +212,25 @@ export default function AccountSheet({ visible, onClose }: Props) {
         </SafeAreaView>
 
         <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+
+          {!isLoggedIn && (
+            <View style={{ gap: 12, marginTop: 8, marginBottom: 8 }}>
+              <TouchableOpacity
+                onPress={() => { onClose(); router.push('/auth/login'); }}
+                style={{ backgroundColor: Colors.primary, borderRadius: 100, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.textPrimary }}>{t('common.log_in')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { onClose(); router.push('/auth/signup'); }}
+                style={{ backgroundColor: surface, borderRadius: 100, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', color: text }}>{t('auth.create_account')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isLoggedIn && (
           <View className="flex-row mt-0 rounded-2xl overflow-hidden" style={{ backgroundColor: surface }}>
             {[
               { label: t('account.uploads'), value: uploadCount },
@@ -222,6 +246,7 @@ export default function AccountSheet({ visible, onClose }: Props) {
               </View>
             ))}
           </View>
+          )}
 
           <Text className="text-[12px] font-semibold tracking-wider mt-6 mb-3" style={{ color: textSecondary }}>
             {t('account.settings_label')}
@@ -300,10 +325,10 @@ export default function AccountSheet({ visible, onClose }: Props) {
             ))}
           </View>
 
-          <Text className="text-[12px] font-semibold tracking-wider mt-6 mb-3" style={{ color: textSecondary }}>
+          {isLoggedIn && <Text className="text-[12px] font-semibold tracking-wider mt-6 mb-3" style={{ color: textSecondary }}>
             {t('account.creator_mode')}
-          </Text>
-          <View className="rounded-2xl p-1 flex-row mb-6" style={{ backgroundColor: surface }}>
+          </Text>}
+          {isLoggedIn && <View className="rounded-2xl p-1 flex-row mb-6" style={{ backgroundColor: surface }}>
             {([false, true] as const).map((on) => (
               <TouchableOpacity
                 key={String(on)}
@@ -322,7 +347,7 @@ export default function AccountSheet({ visible, onClose }: Props) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </View>}
 
           <Text className="text-[12px] font-semibold tracking-wider mt-6 mb-2" style={{ color: textSecondary }}>
             {t('account.language_label')}
@@ -392,15 +417,25 @@ export default function AccountSheet({ visible, onClose }: Props) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setAccountExpanded(e => !e)}
-            className="rounded-full py-3.5 items-center mb-3 flex-row justify-center gap-2"
+            onPress={() => setTermsVisible(true)}
+            className="rounded-full py-3.5 items-center mb-3"
             style={{ backgroundColor: surface }}
           >
-            <Text className="font-semibold text-[15px]" style={{ color: textSecondary }}>{t('account.account_section')}</Text>
-            <Ionicons name={accountExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
+            <Text className="font-semibold text-[15px]" style={{ color: textSecondary }}>Terms & Conditions</Text>
           </TouchableOpacity>
 
-          {accountExpanded && (
+          {isLoggedIn && (
+            <TouchableOpacity
+              onPress={() => setAccountExpanded(e => !e)}
+              className="rounded-full py-3.5 items-center mb-3 flex-row justify-center gap-2"
+              style={{ backgroundColor: surface }}
+            >
+              <Text className="font-semibold text-[15px]" style={{ color: textSecondary }}>{t('account.account_section')}</Text>
+              <Ionicons name={accountExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
+            </TouchableOpacity>
+          )}
+
+          {isLoggedIn && accountExpanded && (
             <View className="rounded-2xl overflow-hidden mb-3" style={{ backgroundColor: surface }}>
               <TouchableOpacity
                 onPress={() => { setAccountExpanded(false); signOut(); onClose(); }}

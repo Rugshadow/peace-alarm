@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, Modal, TouchableOpacity, Image,
+  View, Modal, TouchableOpacity, Image,
   Vibration, NativeModules, Animated, useWindowDimensions, StyleSheet,
 } from 'react-native';
+import { Text } from './Text';
 import * as NavigationBar from 'expo-navigation-bar';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -363,8 +365,15 @@ async function fetchAudioMeta(channelId: string, userId?: string): Promise<Audio
   ]);
 
   const channelDefault: 'newest' | 'oldest' = (channelResult.data?.listening_order as any) ?? 'newest';
-  const overrides = ((userResult.data as any)?.channel_listening_overrides as Record<string, 'newest' | 'oldest'>) ?? {};
-  const listeningOrder = overrides[channelId] ?? channelDefault;
+  const remoteOverrides = ((userResult.data as any)?.channel_listening_overrides as Record<string, 'newest' | 'oldest'>) ?? {};
+  let listeningOrder: 'newest' | 'oldest';
+  if (userId) {
+    listeningOrder = remoteOverrides[channelId] ?? channelDefault;
+  } else {
+    const localRaw = await AsyncStorage.getItem('channel_order_overrides').catch(() => null);
+    const localOverrides: Record<string, 'newest' | 'oldest'> = localRaw ? JSON.parse(localRaw) : {};
+    listeningOrder = localOverrides[channelId] ?? channelDefault;
+  }
   console.log('[fetchAudioMeta] channelId:', channelId, 'listeningOrder:', listeningOrder, 'override:', overrides[channelId] ?? 'none');
   const now = new Date().toISOString();
 

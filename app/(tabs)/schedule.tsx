@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Image, FlatList, TouchableOpacity, Switch } from 'react-native';
+import { View,Image, FlatList, TouchableOpacity, Switch } from 'react-native';
+import { Text } from '../../components/Text';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';

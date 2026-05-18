@@ -182,8 +182,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try { IntentData?.setUserId?.(session.user.id); } catch {}
       } else {
         setUsername(null);
-        setTimeFormatState('standard');
-        setColorSchemeState('light');
+        AsyncStorage.multiGet([TIME_FORMAT_KEY, COLOR_SCHEME_KEY]).then((pairs) => {
+          const tf = pairs[0][1];
+          const cs = pairs[1][1];
+          if (tf === 'standard' || tf === 'military') setTimeFormatState(tf);
+          else setTimeFormatState('standard');
+          if (cs === 'light' || cs === 'dark') setColorSchemeState(cs);
+          else setColorSchemeState('light');
+        });
       }
       setLoading(false);
     });

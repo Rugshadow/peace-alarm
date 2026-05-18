@@ -5,8 +5,11 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import notifee, { EventType, AndroidNotificationSetting } from '@notifee/react-native';
-import { NativeModules, DeviceEventEmitter, AppState } from 'react-native';
+import { NativeModules, DeviceEventEmitter, AppState} from 'react-native';
+import { Text } from '../components/Text';
 import * as SplashScreen from 'expo-splash-screen';
+import { useFonts, NotoSerif_400Regular } from '@expo-google-fonts/noto-serif';
+
 
 SplashScreen.preventAutoHideAsync();
 
@@ -128,6 +131,8 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({ NotoSerif_400Regular });
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>

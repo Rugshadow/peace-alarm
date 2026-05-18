@@ -1,18 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   Modal,
   ScrollView,
   TouchableOpacity,
+  Image,
+  TextInput,
+  ActivityIndicator,
+  Animated,
+  useWindowDimensions,
 } from 'react-native';
+import { Text } from './Text';
 import AlarmRingingModal from './AlarmRingingModal';
 import AppAlert from './AppAlert';
 import { useAppAlert } from '../hooks/useAppAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import ChannelAvatar from './ChannelAvatar';
 import AudioListRow from './AudioListRow';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +24,9 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
 import { saveFavoriteChannel, removeFavoriteChannel } from '../lib/cachedFavorites';
 import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LOCAL_ORDER_KEY = 'channel_order_overrides';
 
 export type Channel = {
   id: string;
@@ -59,11 +66,51 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   const [favoriteClips, setFavoriteClips] = useState<string[]>([]);
   const [heardClips, setHeardClips] = useState<string[]>([]);
   const [userOrder, setUserOrder] = useState<'newest' | 'oldest'>('newest');
+  const [reportStep, setReportStep] = useState<0 | 1 | 2 | 3>(0);
+  const [reportReason, setReportReason] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [channelOptionsVisible, setChannelOptionsVisible] = useState(false);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const { height: screenHeight } = useWindowDimensions();
+
+  const isClosingRef = useRef(false);
+
+  const openChannelOptions = useCallback(() => {
+    isClosingRef.current = false;
+    sheetAnim.setValue(0);
+    setTimeout(() => {
+      setChannelOptionsVisible(true);
+      Animated.timing(sheetAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+    }, 50);
+  }, []);
+
+  const closeChannelOptions = useCallback(() => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    Animated.timing(sheetAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) { setChannelOptionsVisible(false); isClosingRef.current = false; }
+    });
+  }, []);
+  const [ownerUsername, setOwnerUsername] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible && channel) {
-      setUserOrder(channel.listeningOrder ?? 'newest');
-      if (isLoggedIn && session) checkFavoriteStatus();
+      supabase.from('channels').select('owner_id').eq('channel_id', channel.id).single()
+        .then(async ({ data }) => {
+          if (data?.owner_id) {
+            const { data: u } = await supabase.from('users').select('username').eq('user_id', data.owner_id).single();
+            setOwnerUsername(u?.username ?? null);
+          }
+        });
+      if (isLoggedIn && session) {
+        checkFavoriteStatus();
+      } else {
+        setUserOrder(channel.listeningOrder ?? 'newest');
+        AsyncStorage.getItem(LOCAL_ORDER_KEY).then((raw) => {
+          const overrides: Record<string, 'newest' | 'oldest'> = raw ? JSON.parse(raw) : {};
+          setUserOrder(overrides[channel.id] ?? channel.listeningOrder ?? 'newest');
+        });
+      }
     }
   }, [visible, channel, isLoggedIn, session]);
 
@@ -81,18 +128,25 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   };
 
   const handleUserOrderChange = async (newOrder: 'newest' | 'oldest') => {
+    if (!channel) return;
     setUserOrder(newOrder);
-    if (!session || !channel) return;
-    const { data } = await supabase
-      .from('users')
-      .select('channel_listening_overrides')
-      .eq('user_id', session.user.id)
-      .single();
-    const current = (data?.channel_listening_overrides as Record<string, string>) ?? {};
-    await supabase
-      .from('users')
-      .update({ channel_listening_overrides: { ...current, [channel.id]: newOrder } } as any)
-      .eq('user_id', session.user.id);
+    if (session) {
+      const { data } = await supabase
+        .from('users')
+        .select('channel_listening_overrides')
+        .eq('user_id', session.user.id)
+        .single();
+      const current = (data?.channel_listening_overrides as Record<string, string>) ?? {};
+      await supabase
+        .from('users')
+        .update({ channel_listening_overrides: { ...current, [channel.id]: newOrder } } as any)
+        .eq('user_id', session.user.id);
+    } else {
+      const raw = await AsyncStorage.getItem(LOCAL_ORDER_KEY);
+      const overrides: Record<string, string> = raw ? JSON.parse(raw) : {};
+      overrides[channel.id] = newOrder;
+      await AsyncStorage.setItem(LOCAL_ORDER_KEY, JSON.stringify(overrides));
+    }
   };
 
   const toggleFavorite = async () => {
@@ -131,27 +185,80 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   };
 
   const handleListenFrom = async (clipIndex: number) => {
-    if (!session || !channel) return;
-    // uploads is newest-first; indices > clipIndex are older clips — mark them all as heard
+    if (!channel) return;
     const idsToHear = channel.uploads.slice(clipIndex + 1).map(c => c.id);
     const updated = Array.from(new Set([...heardClips, ...idsToHear]));
     setHeardClips(updated);
-    await supabase
-      .from('users')
-      .update({ heard_audio: updated } as any)
-      .eq('user_id', session.user.id);
+    if (session) {
+      await supabase
+        .from('users')
+        .update({ heard_audio: updated } as any)
+        .eq('user_id', session.user.id);
+    }
   };
 
   const handleResetFrom = async (clipIndex: number) => {
-    if (!session || !channel) return;
-    // uploads is newest-first; indices 0..clipIndex are this clip + all newer ones
+    if (!channel) return;
     const idsToReset = new Set(channel.uploads.slice(0, clipIndex + 1).map(c => c.id));
     const updated = heardClips.filter(id => !idsToReset.has(id));
     setHeardClips(updated);
-    await supabase
-      .from('users')
-      .update({ heard_audio: updated } as any)
-      .eq('user_id', session.user.id);
+    if (session) {
+      await supabase
+        .from('users')
+        .update({ heard_audio: updated } as any)
+        .eq('user_id', session.user.id);
+    }
+  };
+
+  const handleResetChannel = async () => {
+    if (!channel) return;
+    const channelIds = new Set(channel.uploads.map(c => c.id));
+    const updated = heardClips.filter(id => !channelIds.has(id));
+    setHeardClips(updated);
+    if (session) {
+      await supabase
+        .from('users')
+        .update({ heard_audio: updated } as any)
+        .eq('user_id', session.user.id);
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!channel || !reportReason.trim()) return;
+    setReportSubmitting(true);
+    try {
+      const { data: channelData } = await supabase
+        .from('channels')
+        .select('owner_id')
+        .eq('channel_id', channel.id)
+        .single();
+      let ownerUsername = '';
+      let ownerEmail = '';
+      if (channelData?.owner_id) {
+        const { data: ownerData } = await supabase
+          .from('users')
+          .select('username, email')
+          .eq('user_id', channelData.owner_id)
+          .single();
+        ownerUsername = (ownerData as any)?.username ?? '';
+        ownerEmail = (ownerData as any)?.email ?? '';
+      }
+      await supabase.from('user_reports').insert({
+        reported_user_id: channelData?.owner_id ?? '',
+        reported_user_username: ownerUsername,
+        reported_user_email: ownerEmail,
+        reporting_user_id: session?.user.id ?? '',
+        reporting_user_username: session ? (session.user.user_metadata?.username ?? '') : 'Guest',
+        reporting_user_email: session?.user.email ?? '',
+        stated_reason: `[Channel: ${channel.name} (${channel.id})] ${reportReason.trim()}`,
+        timestamp: new Date().toISOString(),
+      } as any);
+      setReportStep(3);
+    } catch (e) {
+      console.error('[report] failed:', e);
+    } finally {
+      setReportSubmitting(false);
+    }
   };
 
   const toggleFavoriteClip = async (clipId: string) => {
@@ -176,9 +283,23 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
       <AppAlert {...alertProps} />
       <SafeAreaView className="flex-1" style={{ backgroundColor: bg }} edges={['top', 'left', 'right']}>
         <ScrollView>
-          <View className="items-center px-6 pt-8 pb-6">
-            <ChannelAvatar id={channel.id} name={channel.name} size="large" imageUrl={channel.imageUrl} />
-            <Text className="text-[22px] font-bold mt-4" style={{ color: text }}>{channel.name}</Text>
+          <View style={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 8 }}>
+            {channel.imageUrl ? (
+              <Image
+                source={{ uri: channel.imageUrl }}
+                style={{ width: '100%', aspectRatio: 1, borderRadius: 0 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ width: '100%', aspectRatio: 1, borderRadius: 0, backgroundColor: require('../constants/colors').getChannelColor(channel.id), alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontSize: 64, fontWeight: 'bold' }}>
+                  {channel.name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View className="items-center px-6 pt-3 pb-6">
+            <Text className="text-[22px] font-bold" style={{ color: text }}>{channel.name}</Text>
             <Text className="text-[14px] mt-1" style={{ color: textSecondary }}>
               {t('channel_sheet.listeners_genre', { listeners: channel.listeners.toLocaleString(), genre: t(`genres.${channel.genre.toLowerCase()}`) })}
             </Text>
@@ -188,11 +309,11 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
               </Text>
             )}
 
-            <View className="flex-row gap-3 mt-6 w-full">
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 24, width: '100%', alignItems: 'center' }}>
               <TouchableOpacity
-                onPress={isLoggedIn ? () => onSetAlarm(channel) : showLoginAlert}
+                onPress={() => onSetAlarm(channel)}
                 className="flex-1 rounded-full py-3 items-center"
-                style={{ backgroundColor: Colors.primary, opacity: isLoggedIn ? 1 : 0.4 }}
+                style={{ backgroundColor: Colors.primary }}
               >
                 <Text className="font-bold text-[15px] text-text-primary">{t('channel_sheet.set_alarm')}</Text>
               </TouchableOpacity>
@@ -209,6 +330,13 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
                 <Text className="font-medium text-[15px]" style={{ color: isFavorited ? Colors.textPrimary : text }}>
                   {isFavorited ? t('channel_sheet.favorite_active') : t('channel_sheet.favorite_inactive')}
                 </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={openChannelOptions}
+                style={{ width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="settings-outline" size={20} color={Colors.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -230,45 +358,21 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
               duration={clip.duration}
               isPlaying={playingId === clip.id}
               isFavorited={favoriteClips.includes(clip.id)}
-              isHeard={isLoggedIn ? heardClips.includes(clip.id) : undefined}
+              isHeard={heardClips.includes(clip.id)}
               imageUrl={clip.imageUrl}
               onPress={() => { stop(); setPreviewClip({ audioUrl: clip.audioUrl, duration: clip.duration, title: clip.title, audioId: clip.id }); }}
               onFavorite={() => toggleFavoriteClip(clip.id)}
-              onListenFrom={isLoggedIn ? () => handleListenFrom(index) : undefined}
-              onResetFrom={isLoggedIn ? () => handleResetFrom(index) : undefined}
+              onListenFrom={() => handleListenFrom(index)}
+              onResetFrom={() => handleResetFrom(index)}
             />
           ))}
 
-          {isLoggedIn && (
-            <View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 8 }}>
-              <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 1, marginBottom: 12 }}>
-                {t('channel_sheet.listening_order')}
-              </Text>
-              <View style={{ flexDirection: 'row', backgroundColor: '#F5F5F0', borderRadius: 16, padding: 4 }}>
-                {(['newest', 'oldest'] as const).map((mode) => (
-                  <TouchableOpacity
-                    key={mode}
-                    onPress={() => handleUserOrderChange(mode)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 10,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      backgroundColor: userOrder === mode ? Colors.primary : 'transparent',
-                    }}
-                  >
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: userOrder === mode ? Colors.textPrimary : Colors.textSecondary,
-                    }}>
-                      {mode === 'newest' ? t('channel_sheet.order_newest') : t('channel_sheet.order_oldest')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+          {ownerUsername && (
+            <View style={{ paddingTop: 40, paddingBottom: 32, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: textSecondary }}>by {ownerUsername}</Text>
             </View>
           )}
+
         </ScrollView>
 
         <View style={{ backgroundColor: Colors.primary, height: 56 }}>
@@ -292,6 +396,141 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
           onDismiss={() => setPreviewClip(null)}
         />
       )}
+
+      {/* Channel Options */}
+      <Modal visible={channelOptionsVisible} animationType="none" transparent>
+        <TouchableOpacity style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={closeChannelOptions}>
+          <Animated.View style={{ height: '50%', backgroundColor: bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', transform: [{ translateY: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [screenHeight * 0.5, 0] }) }] }}>
+          <TouchableOpacity activeOpacity={1} style={{ flex: 1 }}>
+            <View style={{ backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 14 }}>
+              <Text style={{ fontSize: 17, fontWeight: '600', color: Colors.textPrimary, textAlign: 'center' }}>
+                Channel Settings
+              </Text>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 24 }}>
+              <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 1, marginBottom: 10 }}>
+                {t('channel_sheet.listening_order')}
+              </Text>
+              <View style={{ flexDirection: 'row', backgroundColor: '#F5F5F0', borderRadius: 16, padding: 4, marginBottom: 20 }}>
+                {(['newest', 'oldest'] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => handleUserOrderChange(mode)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      backgroundColor: userOrder === mode ? Colors.primary : 'transparent',
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: userOrder === mode ? Colors.textPrimary : Colors.textSecondary }}>
+                      {mode === 'newest' ? t('channel_sheet.order_newest') : t('channel_sheet.order_oldest')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                onPress={() => showAlert(
+                  `Reset ${channel.name}?`,
+                  `Are you sure you want to reset ${channel.name}? All tracks will be marked as unlistened.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Reset', style: 'destructive', onPress: handleResetChannel },
+                  ]
+                )}
+                style={{ backgroundColor: Colors.primary, borderRadius: 100, paddingVertical: 14, alignItems: 'center', marginBottom: 12 }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#000000' }}>Reset Channel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => { closeChannelOptions(); setReportReason(''); setReportStep(1); }}
+                style={{ alignItems: 'center', paddingVertical: 10 }}
+              >
+                <Text style={{ color: '#E05555', fontWeight: '600', fontSize: 13 }}>Report Channel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            <View style={{ backgroundColor: Colors.primary, height: 56 }}>
+              <TouchableOpacity
+                onPress={() => closeChannelOptions()}
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+              >
+                <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+                <Text style={{ fontWeight: '500', fontSize: 15, color: Colors.textPrimary }}>{t('common.back')}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Step 1: Confirmation */}
+      <Modal visible={reportStep === 1} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <View style={{ backgroundColor: bg, borderRadius: 20, padding: 24, width: '100%' }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: text, marginBottom: 8 }}>Report Channel</Text>
+            <Text style={{ fontSize: 15, color: textSecondary, marginBottom: 24, lineHeight: 22 }}>
+              Are you sure you want to report {channel.name}?
+            </Text>
+            <TouchableOpacity onPress={() => setReportStep(2)} style={{ backgroundColor: '#CC3333', borderRadius: 100, paddingVertical: 14, alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setReportStep(0)} style={{ backgroundColor: '#F5F5F0', borderRadius: 100, paddingVertical: 14, alignItems: 'center' }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: '#666' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Step 2: Reason input */}
+      <Modal visible={reportStep === 2} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <View style={{ backgroundColor: bg, borderRadius: 20, padding: 24, width: '100%' }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: text, marginBottom: 16 }}>
+              Reason for reporting {channel.name}
+            </Text>
+            <TextInput
+              value={reportReason}
+              onChangeText={setReportReason}
+              placeholder="Describe the issue..."
+              placeholderTextColor={textSecondary}
+              multiline
+              style={{ backgroundColor: '#F5F5F0', borderRadius: 12, padding: 14, fontSize: 15, color: '#000000', minHeight: 100, textAlignVertical: 'top', marginBottom: 20 }}
+            />
+            <TouchableOpacity
+              onPress={handleSubmitReport}
+              disabled={!reportReason.trim() || reportSubmitting}
+              style={{ backgroundColor: '#CC3333', borderRadius: 100, paddingVertical: 14, alignItems: 'center', marginBottom: 10, opacity: reportReason.trim() && !reportSubmitting ? 1 : 0.4 }}
+            >
+              {reportSubmitting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Report</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setReportStep(0)} style={{ backgroundColor: '#F5F5F0', borderRadius: 100, paddingVertical: 14, alignItems: 'center' }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: '#666' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Step 3: Success */}
+      <Modal visible={reportStep === 3} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <View style={{ backgroundColor: bg, borderRadius: 20, padding: 24, width: '100%' }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: text, marginBottom: 8 }}>
+              {channel.name} has been reported.
+            </Text>
+            <TouchableOpacity onPress={() => setReportStep(0)} style={{ backgroundColor: Colors.primary, borderRadius: 100, paddingVertical: 14, alignItems: 'center', marginTop: 12 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.textPrimary }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }

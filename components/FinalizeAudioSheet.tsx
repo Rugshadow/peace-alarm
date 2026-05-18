@@ -1,7 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
-  Text,
   Modal,
   TextInput,
   TouchableOpacity,
@@ -10,6 +9,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
+import { Text } from './Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';

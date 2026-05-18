@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   Modal,
   TextInput,
   TouchableOpacity,
@@ -10,6 +9,7 @@ import {
   ScrollView,
   FlatList,
 } from 'react-native';
+import { Text } from './Text';
 import AppAlert from './AppAlert';
 import { useAppAlert } from '../hooks/useAppAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';

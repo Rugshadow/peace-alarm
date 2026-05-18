@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View,FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text } from '../../components/Text';
 import AppAlert from '../../components/AppAlert';
 import { useAppAlert } from '../../hooks/useAppAlert';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';

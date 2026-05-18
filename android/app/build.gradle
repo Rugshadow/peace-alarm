@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.peacealarm.app'
+    namespace 'com.roosteralarm.app'
     defaultConfig {
-        applicationId 'com.peacealarm.app'
+        applicationId 'com.roosteralarm.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

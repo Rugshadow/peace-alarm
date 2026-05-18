@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TextInput,
   FlatList,
@@ -9,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import { Text } from '../../components/Text';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
