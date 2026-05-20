@@ -56,7 +56,8 @@ object AlarmSoundManager {
             val mp = MediaPlayer()
             mp.setAudioAttributes(attr)
             mp.setVolume(curveVolume(vol), curveVolume(vol))
-            mp.setDataSource(url)
+            if (url.startsWith("file://")) mp.setDataSource(context, Uri.parse(url))
+            else mp.setDataSource(url)
             mp.isLooping = true
             mp.setOnErrorListener { _, what, extra ->
                 Log.e("RoosterAlarm", "AlarmSoundManager: MediaPlayer error what=$what extra=$extra")
@@ -90,7 +91,8 @@ object AlarmSoundManager {
             val mp = MediaPlayer()
             mp.setAudioAttributes(attr)
             mp.setVolume(curveVolume(vol), curveVolume(vol))
-            mp.setDataSource(url)
+            if (url.startsWith("file://")) mp.setDataSource(context, Uri.parse(url))
+            else mp.setDataSource(url)
             mp.isLooping = true
             mp.setOnErrorListener { _, what, extra ->
                 Log.e("RoosterAlarm", "AlarmSoundManager: MediaPlayer error what=$what extra=$extra")

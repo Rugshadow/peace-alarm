@@ -275,12 +275,12 @@ function ChannelPickerModal({
     try {
       const { data } = await supabase
         .from('channels')
-        .select('channel_id, name, genre, cover_photo, listening_order');
+        .select('channel_id, name, genre, cover_photo, listening_order, active_alarms');
       setAllChannels((data ?? []).map((ch: any) => ({
         id: ch.channel_id,
         name: ch.name,
         genre: ch.genre ?? '',
-        listeners: 0,
+        listeners: ch.active_alarms ?? 0,
         bio: '',
         imageUrl: ch.cover_photo ?? undefined,
         uploads: [],
@@ -307,7 +307,7 @@ function ChannelPickerModal({
     : activeChannels;
 
   // "All" browse layout — only when not searching
-  const topChannels = [...allChannels].sort((a, b) => a.name.localeCompare(b.name));
+  const topChannels = [...allChannels].sort((a, b) => b.listeners - a.listeners);
   const { width } = useWindowDimensions();
   const gridItemWidth = (width - 32 - 32) / 3;
 
@@ -425,10 +425,10 @@ function ChannelPickerModal({
           // "All" tab — browse layout with carousels
           <ScrollView showsVerticalScrollIndicator={false} className="flex-1" contentContainerStyle={{ paddingTop: 8, paddingBottom: 16 }}>
             <PickerCarouselRow
-              title={t('alarm_sheet.all_channels')}
+              title={t('browse.popular')}
               channels={topChannels}
               onPress={handleSelect}
-              onSeeMore={() => setGridView({ title: 'All Channels', channels: topChannels })}
+              onSeeMore={() => setGridView({ title: t('browse.popular'), channels: topChannels })}
             />
             {genreSections.map((section) => (
               <PickerCarouselRow

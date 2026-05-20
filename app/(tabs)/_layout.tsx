@@ -130,7 +130,7 @@ export default function TabLayout() {
           return <Header routeName={route.name} />;
         },
         tabBarActiveTintColor: '#3a3a3a',
-        tabBarInactiveTintColor: '#888888',
+        tabBarInactiveTintColor: '#555555',
         tabBarStyle: {
           backgroundColor: Colors.primary,
           borderTopColor: Colors.primary,
@@ -147,28 +147,28 @@ export default function TabLayout() {
         name="browse"
         options={{
           title: t('tabs.browse'),
-          tabBarIcon: ({ color }) => <Ionicons name="grid" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name="grid" size={22} color={color} style={focused ? { textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 } : undefined} />,
         }}
       />
       <Tabs.Screen
         name="favorites"
         options={{
           title: t('tabs.favorites'),
-          tabBarIcon: ({ color }) => <Ionicons name="heart" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name="heart" size={22} color={color} style={focused ? { textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 } : undefined} />,
         }}
       />
       <Tabs.Screen
         name="schedule"
         options={{
           title: t('tabs.schedule'),
-          tabBarIcon: ({ color }) => <Ionicons name="alarm" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name="alarm" size={22} color={color} style={focused ? { textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 } : undefined} />,
         }}
       />
       <Tabs.Screen
         name="uploads"
         options={{
           title: t('tabs.create'),
-          tabBarIcon: ({ color }) => <Ionicons name="mic" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name="mic" size={22} color={color} style={focused ? { textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 } : undefined} />,
           href: creatorMode ? undefined : null,
         }}
       />

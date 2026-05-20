@@ -341,6 +341,25 @@ class AlarmService : Service() {
             }
         } catch (e: Exception) {
             Log.e("RoosterAlarm", "AlarmService: fetchLatestAudioUrl failed: ${e.message}")
+            fetchLocalAudioUrl(channelId)
+        }
+    }
+
+    private fun fetchLocalAudioUrl(channelId: String): String? {
+        return try {
+            val prefs = getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+            val json = prefs.getString("offline_audio_$channelId", null) ?: return null
+            val arr = JSONArray(json)
+            if (arr.length() == 0) return null
+
+            // Sort by createdAt ascending (oldest first)
+            val entries = (0 until arr.length()).map { arr.getJSONObject(it) }
+                .sortedBy { it.optString("createdAt") }
+
+            Log.d("RoosterAlarm", "AlarmService: using local cache, ${entries.size} entries for $channelId")
+            entries.firstOrNull()?.optString("path")?.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e("RoosterAlarm", "AlarmService: fetchLocalAudioUrl failed: ${e.message}")
             null
         }
     }

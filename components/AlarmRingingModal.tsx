@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { getLocalAudioPath, getLocalChannelAudio, getLocalHeardAudio, addLocalHeardAudio } from '../lib/offlineAudio';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +22,7 @@ const BANNER_AD_UNIT_ID = __DEV__ ? TestIds.BANNER : 'ca-app-pub-523321746114303
 const VIBRATION_PATTERN = [0, 500, 250];
 const BAR_COUNT = 40;
 
-type AudioMeta = { audioUrl: string; duration: number; waveform: number[]; audioId: string; listeningOrder: 'newest' | 'oldest'; title: string };
+type AudioMeta = { audioUrl: string; duration: number; waveform: number[]; audioId: string; listeningOrder: 'newest' | 'oldest' | 'shuffle'; title: string };
 
 type PreviewClip = { audioUrl: string; duration: number; title: string; audioId: string };
 
@@ -43,7 +44,7 @@ export default function AlarmRingingModal({ visible, channelId, channelName, cha
   const startedRef = useRef(false);
   const dismissedRef = useRef(false);
   const userDismissedRef = useRef(false);
-  const playedAudioRef = useRef<{ audioId: string; listeningOrder: 'newest' | 'oldest' } | null>(null);
+  const playedAudioRef = useRef<{ audioId: string; listeningOrder: 'newest' | 'oldest' | 'shuffle' } | null>(null);
 
   const playheadAnim = useRef(new Animated.Value(0)).current;
   const playheadLoopRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -85,10 +86,8 @@ export default function AlarmRingingModal({ visible, channelId, channelName, cha
       playedAudioRef.current = { audioId: audioMeta.audioId, listeningOrder: audioMeta.listeningOrder };
       const alreadyPlaying = await IntentData.isAlarmPlaying?.() ?? false;
       const startMs = alreadyPlaying ? (await IntentData.getAlarmPlaybackPosition?.() ?? 0) : 0;
-      console.log('[launch] alreadyPlaying:', alreadyPlaying, 'startMs:', startMs);
-      if (!alreadyPlaying) {
-        IntentData.playAlarmUrl(audioMeta.audioUrl).catch((e: any) => console.error('[launch] playAlarmUrl error:', e));
-      }
+      console.log('[launch] alreadyPlaying:', alreadyPlaying, 'startMs:', startMs, 'audioUrl:', audioMeta.audioUrl);
+      IntentData.playAlarmUrl(audioMeta.audioUrl).catch((e: any) => console.error('[launch] playAlarmUrl error:', e));
       startPlayhead(audioMeta.duration, startMs);
       setUsingFallback(false);
     } catch (e) {
@@ -168,18 +167,14 @@ export default function AlarmRingingModal({ visible, channelId, channelName, cha
   };
 
   const markAsHeard = async (audioId: string) => {
-    if (!session) { console.warn('[markAsHeard] no session'); return; }
+    await addLocalHeardAudio(audioId);
+    if (!session) return;
     const userId = session.user.id;
     const { data, error: fetchErr } = await supabase.from('users').select('heard_audio').eq('user_id', userId).single();
-    if (fetchErr) { console.error('[markAsHeard] fetch error:', fetchErr.message); return; }
+    if (fetchErr) return;
     const current: string[] = (data?.heard_audio as string[]) ?? [];
     if (!current.includes(audioId)) {
-      const { error: updateErr } = await supabase
-        .from('users')
-        .update({ heard_audio: [...current, audioId] } as any)
-        .eq('user_id', userId);
-      if (updateErr) console.error('[markAsHeard] update error:', updateErr.message);
-      else console.log('[markAsHeard] marked heard:', audioId);
+      await supabase.from('users').update({ heard_audio: [...current, audioId] } as any).eq('user_id', userId);
     }
   };
 
@@ -356,69 +351,111 @@ const placeholderWaveform = Array.from({ length: BAR_COUNT }, (_, i) =>
   0.15 + 0.2 * Math.abs(Math.sin(i * 0.4))
 );
 
-async function fetchAudioMeta(channelId: string, userId?: string): Promise<AudioMeta> {
-  const [channelResult, userResult] = await Promise.all([
-    supabase.from('channels').select('listening_order').eq('channel_id', channelId).single(),
-    userId
-      ? supabase.from('users').select('channel_listening_overrides').eq('user_id', userId).single()
-      : Promise.resolve({ data: null }),
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
   ]);
+}
 
-  const channelDefault: 'newest' | 'oldest' = (channelResult.data?.listening_order as any) ?? 'newest';
-  const remoteOverrides = ((userResult.data as any)?.channel_listening_overrides as Record<string, 'newest' | 'oldest'>) ?? {};
-  let listeningOrder: 'newest' | 'oldest';
-  if (userId) {
-    listeningOrder = remoteOverrides[channelId] ?? channelDefault;
-  } else {
+async function fetchAudioMeta(channelId: string, userId?: string): Promise<AudioMeta> {
+  // If offline audio is cached for this channel, use it immediately — no network wait
+  const localFiles = await getLocalChannelAudio(channelId);
+  const localEntries = Object.entries(localFiles);
+  if (localEntries.length > 0) {
     const localRaw = await AsyncStorage.getItem('channel_order_overrides').catch(() => null);
-    const localOverrides: Record<string, 'newest' | 'oldest'> = localRaw ? JSON.parse(localRaw) : {};
-    listeningOrder = localOverrides[channelId] ?? channelDefault;
+    const localOverrides: Record<string, 'newest' | 'oldest' | 'shuffle'> = localRaw ? JSON.parse(localRaw) : {};
+    const listeningOrder: 'newest' | 'oldest' | 'shuffle' = localOverrides[channelId] ?? 'newest';
+    const heardIds = await getLocalHeardAudio();
+    const sorted = [...localEntries].sort((a, b) =>
+      new Date(a[1].createdAt).getTime() - new Date(b[1].createdAt).getTime()
+    );
+    let target: [string, typeof localEntries[0][1]];
+    if (listeningOrder === 'newest') {
+      const unheard = [...sorted].reverse().filter(([id]) => !heardIds.includes(id));
+      target = unheard.length > 0 ? unheard[0] : sorted[sorted.length - 1];
+    } else if (listeningOrder === 'shuffle') {
+      const unheard = localEntries.filter(([id]) => !heardIds.includes(id));
+      const pool = unheard.length > 0 ? unheard : localEntries;
+      target = pool[Math.floor(Math.random() * pool.length)];
+    } else {
+      const unheard = sorted.filter(([id]) => !heardIds.includes(id));
+      target = unheard.length > 0 ? unheard[0] : sorted[sorted.length - 1];
+    }
+    console.log('[fetchAudioMeta] using local cache, audioId:', target[0], 'path:', target[1].path);
+    const waveform = await computeWaveform(target[1].path);
+    return { audioUrl: target[1].path, duration: target[1].duration, waveform, audioId: target[0], listeningOrder, title: target[1].title };
   }
+
+  // No local cache — fetch from Supabase
+  let listeningOrder: 'newest' | 'oldest' | 'shuffle' = 'newest';
+  try {
+    const [channelResult, userResult] = await withTimeout(Promise.all([
+      supabase.from('channels').select('listening_order').eq('channel_id', channelId).single(),
+      userId
+        ? supabase.from('users').select('channel_listening_overrides').eq('user_id', userId).single()
+        : Promise.resolve({ data: null }),
+    ]), 4000);
+    const channelDefault: 'newest' | 'oldest' | 'shuffle' = (channelResult.data?.listening_order as any) ?? 'newest';
+    const remoteOverrides = ((userResult.data as any)?.channel_listening_overrides as Record<string, 'newest' | 'oldest' | 'shuffle'>) ?? {};
+    if (userId) {
+      listeningOrder = remoteOverrides[channelId] ?? channelDefault;
+    } else {
+      const localRaw = await AsyncStorage.getItem('channel_order_overrides').catch(() => null);
+      const localOverrides: Record<string, 'newest' | 'oldest' | 'shuffle'> = localRaw ? JSON.parse(localRaw) : {};
+      listeningOrder = localOverrides[channelId] ?? channelDefault;
+    }
+  } catch {
+    const localRaw = await AsyncStorage.getItem('channel_order_overrides').catch(() => null);
+    const localOverrides: Record<string, 'newest' | 'oldest' | 'shuffle'> = localRaw ? JSON.parse(localRaw) : {};
+    listeningOrder = localOverrides[channelId] ?? 'newest';
+  }
+
   console.log('[fetchAudioMeta] channelId:', channelId, 'listeningOrder:', listeningOrder);
   const now = new Date().toISOString();
-
   let audioId: string;
   let audioUrl: string;
   let duration: number;
   let title: string;
 
   if (listeningOrder === 'newest') {
-    const { data, error } = await supabase
-      .from('audio_files')
-      .select('audio_id, audio_file, duration_seconds, title')
-      .eq('channel_id', channelId)
-      .or(`release_at.is.null,release_at.lte.${now}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data, error } = await withTimeout(
+      supabase.from('audio_files').select('audio_id, audio_file, duration_seconds, title')
+        .eq('channel_id', channelId).or(`release_at.is.null,release_at.lte.${now}`)
+        .order('created_at', { ascending: false }).limit(1).single(),
+      4000
+    );
     if (error || !data?.audio_file) throw new Error('no audio');
     audioId = data.audio_id as string;
     audioUrl = data.audio_file as string;
     duration = (data.duration_seconds as number) ?? 30;
     title = (data.title as string) ?? '';
-  } else {
-    let heardIds: string[] = [];
-    if (userId) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('heard_audio')
-        .eq('user_id', userId)
-        .single();
-      heardIds = (userData?.heard_audio as string[]) ?? [];
-    }
-
-    const { data: allAudio, error } = await supabase
-      .from('audio_files')
-      .select('audio_id, audio_file, duration_seconds, title')
-      .eq('channel_id', channelId)
-      .or(`release_at.is.null,release_at.lte.${now}`)
-      .order('created_at', { ascending: true });
-
+  } else if (listeningOrder === 'shuffle') {
+    const heardIds = await getLocalHeardAudio();
+    const { data: allAudio, error } = await withTimeout(
+      supabase.from('audio_files').select('audio_id, audio_file, duration_seconds, title')
+        .eq('channel_id', channelId).or(`release_at.is.null,release_at.lte.${now}`),
+      4000
+    );
     if (error || !allAudio?.length) throw new Error('no audio');
-
+    const unheard = allAudio.filter((a: any) => !heardIds.includes(a.audio_id));
+    const pool = unheard.length > 0 ? unheard : allAudio;
+    const target = pool[Math.floor(Math.random() * pool.length)];
+    audioId = target.audio_id as string;
+    audioUrl = target.audio_file as string;
+    duration = (target.duration_seconds as number) ?? 30;
+    title = (target.title as string) ?? '';
+  } else {
+    const heardIds = await getLocalHeardAudio();
+    const { data: allAudio, error } = await withTimeout(
+      supabase.from('audio_files').select('audio_id, audio_file, duration_seconds, title')
+        .eq('channel_id', channelId).or(`release_at.is.null,release_at.lte.${now}`)
+        .order('created_at', { ascending: true }),
+      4000
+    );
+    if (error || !allAudio?.length) throw new Error('no audio');
     const unheard = allAudio.filter((a: any) => !heardIds.includes(a.audio_id));
     const target = unheard.length > 0 ? unheard[0] : allAudio[allAudio.length - 1];
-
     audioId = target.audio_id as string;
     audioUrl = target.audio_file as string;
     duration = (target.duration_seconds as number) ?? 30;

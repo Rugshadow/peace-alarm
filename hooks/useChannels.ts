@@ -11,40 +11,17 @@ export function useChannels(language?: string) {
   }, [language]);
 
   const load = async () => {
-    let channelsQuery = supabase.from('channels').select('channel_id, name, genre, bio, cover_photo, owner_id, listening_order');
+    let channelsQuery = supabase.from('channels').select('channel_id, name, genre, bio, cover_photo, listening_order, active_alarms');
     if (language) channelsQuery = (channelsQuery as any).or(`language.cs.{"${language}"},language.cs.{"all"}`);
 
-    const [{ data: channelRows }, { data: audioFiles }, { data: users }] = await Promise.all([
+    const [{ data: channelRows }, { data: audioFiles }] = await Promise.all([
       channelsQuery,
       supabase.from('audio_files').select('*').order('created_at', { ascending: false }),
-      supabase.from('users').select('user_id, set_alarms'),
     ]);
 
     if (!channelRows) { setLoading(false); return; }
 
     const files = audioFiles ?? [];
-
-    // alarms may store channelId as owner user_id (old) or channel_id (new) — resolve both
-    const ownerToChannelId: Record<string, string> = {};
-    for (const ch of channelRows) {
-      ownerToChannelId[ch.owner_id] = ch.channel_id;
-    }
-
-    // Count users who have at least one alarm set for each channel
-    const alarmCountMap: Record<string, number> = {};
-    for (const u of (users ?? [])) {
-      const alarms = u.set_alarms as Record<string, { channelId: string }> | null;
-      if (!alarms) continue;
-      const seen = new Set<string>();
-      for (const alarm of Object.values(alarms)) {
-        if (!alarm.channelId) continue;
-        const resolvedId = ownerToChannelId[alarm.channelId] ?? alarm.channelId;
-        if (!seen.has(resolvedId)) {
-          seen.add(resolvedId);
-          alarmCountMap[resolvedId] = (alarmCountMap[resolvedId] ?? 0) + 1;
-        }
-      }
-    }
 
     const mapped: Channel[] = channelRows.map((ch: any) => {
       const now = new Date();
@@ -63,11 +40,11 @@ export function useChannels(language?: string) {
         id: ch.channel_id,
         name: ch.name,
         genre: ch.genre ?? 'general',
-        listeners: alarmCountMap[ch.channel_id] ?? 0,
+        listeners: ch.active_alarms ?? 0,
         bio: ch.bio ?? '',
         imageUrl: ch.cover_photo ?? undefined,
         uploads,
-        listeningOrder: (ch.listening_order as 'newest' | 'oldest') ?? 'newest',
+        listeningOrder: (ch.listening_order as 'newest' | 'oldest' | 'shuffle') ?? 'newest',
       };
     });
 

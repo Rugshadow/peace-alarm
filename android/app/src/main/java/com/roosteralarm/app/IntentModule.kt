@@ -93,6 +93,61 @@ class IntentModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     }
 
     @ReactMethod
+    fun saveOfflineManifest(channelId: String, entriesJson: String, promise: Promise) {
+        reactApplicationContext.getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putString("offline_audio_$channelId", entriesJson).apply()
+        promise.resolve(null)
+    }
+
+    @ReactMethod
+    fun clearOfflineManifest(channelId: String, promise: Promise) {
+        reactApplicationContext.getSharedPreferences("peace_alarm_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().remove("offline_audio_$channelId").apply()
+        promise.resolve(null)
+    }
+
+    @ReactMethod
+    fun getDocumentDirectory(promise: Promise) {
+        promise.resolve(reactApplicationContext.filesDir.absolutePath)
+    }
+
+    @ReactMethod
+    fun downloadFile(url: String, destPath: String, promise: Promise) {
+        Thread {
+            try {
+                val file = java.io.File(destPath)
+                file.parentFile?.mkdirs()
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 30000
+                conn.readTimeout = 60000
+                conn.connect()
+                if (conn.responseCode != 200) {
+                    promise.reject("ERR_DOWNLOAD", "HTTP ${conn.responseCode}")
+                    conn.disconnect()
+                    return@Thread
+                }
+                conn.inputStream.use { input -> file.outputStream().use { output -> input.copyTo(output) } }
+                conn.disconnect()
+                promise.resolve("file://${file.absolutePath}")
+            } catch (e: Exception) {
+                promise.reject("ERR_DOWNLOAD", e.message)
+            }
+        }.start()
+    }
+
+    @ReactMethod
+    fun deleteDir(dirPath: String, promise: Promise) {
+        Thread {
+            try {
+                java.io.File(dirPath).deleteRecursively()
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("ERR_DELETE", e.message)
+            }
+        }.start()
+    }
+
+    @ReactMethod
     fun isIgnoringBatteryOptimizations(promise: Promise) {
         val pm = reactApplicationContext.getSystemService(PowerManager::class.java)
         promise.resolve(pm.isIgnoringBatteryOptimizations(reactApplicationContext.packageName))

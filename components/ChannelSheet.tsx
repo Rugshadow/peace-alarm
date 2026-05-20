@@ -23,6 +23,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
 import { saveFavoriteChannel, removeFavoriteChannel } from '../lib/cachedFavorites';
+import { isOfflineEnabled, enableOffline, disableOffline, addLocalHeardAudio, removeLocalHeardAudio, setLocalHeardAudio } from '../lib/offlineAudio';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -36,7 +37,7 @@ export type Channel = {
   bio: string;
   uploads: AudioClip[];
   imageUrl?: string;
-  listeningOrder?: 'newest' | 'oldest';
+  listeningOrder?: 'newest' | 'oldest' | 'shuffle';
 };
 
 export type AudioClip = {
@@ -57,7 +58,7 @@ type Props = {
 
 export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: Props) {
   const { session, isLoggedIn } = useAuth();
-  const { bg, text, textSecondary } = useTheme();
+  const { bg, text, textSecondary, surface } = useTheme();
   const { showAlert, alertProps } = useAppAlert();
   const { t } = useTranslation();
   const { playingId, play, stop } = useAudioPlayer();
@@ -65,11 +66,13 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteClips, setFavoriteClips] = useState<string[]>([]);
   const [heardClips, setHeardClips] = useState<string[]>([]);
-  const [userOrder, setUserOrder] = useState<'newest' | 'oldest'>('newest');
+  const [userOrder, setUserOrder] = useState<'newest' | 'oldest' | 'shuffle'>('newest');
   const [reportStep, setReportStep] = useState<0 | 1 | 2 | 3>(0);
   const [reportReason, setReportReason] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [channelOptionsVisible, setChannelOptionsVisible] = useState(false);
+  const [offlineEnabled, setOfflineEnabled] = useState(false);
+  const [offlineLoading, setOfflineLoading] = useState(false);
   const sheetAnim = useRef(new Animated.Value(0)).current;
   const { height: screenHeight } = useWindowDimensions();
 
@@ -78,11 +81,12 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
   const openChannelOptions = useCallback(() => {
     isClosingRef.current = false;
     sheetAnim.setValue(0);
+    if (channel) isOfflineEnabled(channel.id).then(setOfflineEnabled);
     setTimeout(() => {
       setChannelOptionsVisible(true);
       Animated.timing(sheetAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     }, 50);
-  }, []);
+  }, [channel]);
 
   const closeChannelOptions = useCallback(() => {
     if (isClosingRef.current) return;
@@ -127,7 +131,7 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
     setUserOrder(overrides[channel!.id] ?? channel!.listeningOrder ?? 'newest');
   };
 
-  const handleUserOrderChange = async (newOrder: 'newest' | 'oldest') => {
+  const handleUserOrderChange = async (newOrder: 'newest' | 'oldest' | 'shuffle') => {
     if (!channel) return;
     setUserOrder(newOrder);
     if (session) {
@@ -189,37 +193,31 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
     const idsToHear = channel.uploads.slice(clipIndex + 1).map(c => c.id);
     const updated = Array.from(new Set([...heardClips, ...idsToHear]));
     setHeardClips(updated);
+    await Promise.all(idsToHear.map(id => addLocalHeardAudio(id)));
     if (session) {
-      await supabase
-        .from('users')
-        .update({ heard_audio: updated } as any)
-        .eq('user_id', session.user.id);
+      await supabase.from('users').update({ heard_audio: updated } as any).eq('user_id', session.user.id);
     }
   };
 
   const handleResetFrom = async (clipIndex: number) => {
     if (!channel) return;
-    const idsToReset = new Set(channel.uploads.slice(0, clipIndex + 1).map(c => c.id));
-    const updated = heardClips.filter(id => !idsToReset.has(id));
+    const idsToReset = channel.uploads.slice(0, clipIndex + 1).map(c => c.id);
+    const updated = heardClips.filter(id => !new Set(idsToReset).has(id));
     setHeardClips(updated);
+    await removeLocalHeardAudio(idsToReset);
     if (session) {
-      await supabase
-        .from('users')
-        .update({ heard_audio: updated } as any)
-        .eq('user_id', session.user.id);
+      await supabase.from('users').update({ heard_audio: updated } as any).eq('user_id', session.user.id);
     }
   };
 
   const handleResetChannel = async () => {
     if (!channel) return;
-    const channelIds = new Set(channel.uploads.map(c => c.id));
-    const updated = heardClips.filter(id => !channelIds.has(id));
+    const channelIds = channel.uploads.map(c => c.id);
+    const updated = heardClips.filter(id => !new Set(channelIds).has(id));
     setHeardClips(updated);
+    await removeLocalHeardAudio(channelIds);
     if (session) {
-      await supabase
-        .from('users')
-        .update({ heard_audio: updated } as any)
-        .eq('user_id', session.user.id);
+      await supabase.from('users').update({ heard_audio: updated } as any).eq('user_id', session.user.id);
     }
   };
 
@@ -334,9 +332,9 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
 
               <TouchableOpacity
                 onPress={openChannelOptions}
-                style={{ width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Ionicons name="settings-outline" size={20} color={Colors.primary} />
+                <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -400,7 +398,7 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
       {/* Channel Options */}
       <Modal visible={channelOptionsVisible} animationType="none" transparent>
         <TouchableOpacity style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={closeChannelOptions}>
-          <Animated.View style={{ height: '50%', backgroundColor: bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', transform: [{ translateY: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [screenHeight * 0.5, 0] }) }] }}>
+          <Animated.View style={{ height: '100%', backgroundColor: bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', transform: [{ translateY: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [screenHeight, 0] }) }] }}>
           <TouchableOpacity activeOpacity={1} style={{ flex: 1 }}>
             <View style={{ backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 14 }}>
               <Text style={{ fontSize: 17, fontWeight: '600', color: Colors.textPrimary, textAlign: 'center' }}>
@@ -412,25 +410,59 @@ export default function ChannelSheet({ channel, visible, onClose, onSetAlarm }: 
               <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 1, marginBottom: 10 }}>
                 {t('channel_sheet.listening_order')}
               </Text>
-              <View style={{ flexDirection: 'row', backgroundColor: '#F5F5F0', borderRadius: 16, padding: 4, marginBottom: 20 }}>
-                {(['newest', 'oldest'] as const).map((mode) => (
+              <View style={{ backgroundColor: surface, borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+                {([
+                  { mode: 'newest', label: t('channel_sheet.order_newest') },
+                  { mode: 'oldest', label: t('channel_sheet.order_oldest') },
+                  { mode: 'shuffle', label: t('channel_sheet.order_shuffle') },
+                ] as { mode: 'newest' | 'oldest' | 'shuffle'; label: string }[]).map(({ mode, label }, i, arr) => (
                   <TouchableOpacity
                     key={mode}
                     onPress={() => handleUserOrderChange(mode)}
                     style={{
-                      flex: 1,
-                      paddingVertical: 10,
-                      borderRadius: 12,
+                      flexDirection: 'row',
                       alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                      borderBottomColor: bg,
                       backgroundColor: userOrder === mode ? Colors.primary : 'transparent',
                     }}
                   >
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: userOrder === mode ? Colors.textPrimary : Colors.textSecondary }}>
-                      {mode === 'newest' ? t('channel_sheet.order_newest') : t('channel_sheet.order_oldest')}
-                    </Text>
+                    <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: userOrder === mode ? '#000000' : textSecondary }}>{label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!channel) return;
+                  setOfflineLoading(true);
+                  try {
+                    if (offlineEnabled) {
+                      await disableOffline(channel.id);
+                      setOfflineEnabled(false);
+                    } else {
+                      await enableOffline(channel.id);
+                      setOfflineEnabled(true);
+                    }
+                  } catch (e) {
+                    console.error('[offline] toggle failed:', e);
+                  } finally {
+                    setOfflineLoading(false);
+                  }
+                }}
+                disabled={offlineLoading}
+                style={{ backgroundColor: Colors.primary, borderRadius: 100, paddingVertical: 14, alignItems: 'center', marginBottom: 12, opacity: offlineLoading ? 0.6 : 1, flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+              >
+                {offlineLoading
+                  ? <ActivityIndicator size="small" color="#000" />
+                  : <Ionicons name={offlineEnabled ? 'cloud-done' : 'cloud-download-outline'} size={18} color="#000000" />
+                }
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#000000' }}>
+                  {offlineEnabled ? 'Saved Offline' : 'Save Offline'}
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => showAlert(

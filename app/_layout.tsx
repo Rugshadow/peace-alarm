@@ -15,9 +15,10 @@ SplashScreen.preventAutoHideAsync();
 
 const { IntentData } = NativeModules;
 import * as NavigationBar from 'expo-navigation-bar';
-import { AuthProvider } from '../contexts/AuthContext';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { AlarmsProvider, useAlarmsContext } from '../contexts/AlarmsContext';
 import { setupNotificationChannel } from '../lib/alarmScheduler';
+import { syncOfflineAudio, syncHeardAudioToSupabase } from '../lib/offlineAudio';
 import AlarmRingingModal from '../components/AlarmRingingModal';
 
 type RingingAlarm = { channelId: string; channelName: string; channelImageUrl?: string };
@@ -34,6 +35,7 @@ function extractAlarm(data: Record<string, any> | undefined): RingingAlarm | nul
 function AppBootstrap({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { deactivateByChannelId } = useAlarmsContext();
+  const { session } = useAuth();
   const [ringingAlarm, setRingingAlarm] = useState<RingingAlarm | null>(null);
   const initialized = useRef(false);
   const ringingAlarmRef = useRef<RingingAlarm | null>(null);
@@ -62,12 +64,17 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
     // AppState: covers the case where app was in background and is brought to front.
     const appStateSub = AppState.addEventListener('change', async (nextState) => {
       console.log('[layout] AppState changed to:', nextState);
-      if (nextState === 'active' && IntentData) {
-        const alarmData = await IntentData.getAlarmData();
-        console.log('[layout] AppState active getAlarmData:', JSON.stringify(alarmData));
-        if (alarmData?.channelId) {
-          console.log('[layout] alarm detected via AppState active:', alarmData.channelId);
-          setRingingAlarm(prev => prev?.channelId === alarmData.channelId ? prev : alarmData as RingingAlarm);
+      if (nextState === 'active') {
+        if (session?.user.id) {
+          syncHeardAudioToSupabase(session.user.id).catch(() => {});
+        }
+        if (IntentData) {
+          const alarmData = await IntentData.getAlarmData();
+          console.log('[layout] AppState active getAlarmData:', JSON.stringify(alarmData));
+          if (alarmData?.channelId) {
+            console.log('[layout] alarm detected via AppState active:', alarmData.channelId);
+            setRingingAlarm(prev => prev?.channelId === alarmData.channelId ? prev : alarmData as RingingAlarm);
+          }
         }
       }
     });
@@ -102,6 +109,7 @@ function AppBootstrap({ children }: { children: React.ReactNode }) {
     (async () => {
       try { await NavigationBar.setVisibilityAsync('hidden'); } catch {}
       await setupNotificationChannel();
+      syncOfflineAudio().catch(() => {}); // fire-and-forget
 
       // Handle alarm that cold-started the app via native AlarmReceiver
       if (IntentData) {

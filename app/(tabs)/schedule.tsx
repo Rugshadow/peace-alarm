@@ -98,7 +98,7 @@ export default function ScheduleScreen() {
         <FlatList
           data={alarms}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, gap: 12 }}
+          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 88 }}
           renderItem={({ item }) => (
             <View className="bg-surface rounded-2xl overflow-hidden flex-row items-start">
               {item.channelImageUrl ? (
@@ -143,25 +143,25 @@ export default function ScheduleScreen() {
                 <Switch
                   value={item.active !== false}
                   onValueChange={() => toggleAlarm(item.id)}
-                  trackColor={{ false: '#ccc', true: Colors.primary }}
+                  trackColor={{ false: '#888', true: Colors.primary }}
                   thumbColor="#fff"
                 />
                 <TouchableOpacity onPress={() => setEditingAlarm(item)}>
-                  <Ionicons name="create-outline" size={24} color={text} />
+                  <Ionicons name="create-outline" size={24} color="#888" />
                 </TouchableOpacity>
               </View>
             </View>
           )}
-          ListFooterComponent={
-            <TouchableOpacity
-              onPress={() => setSheetVisible(true)}
-              className="rounded-full py-3.5 items-center mt-2"
-              style={{ backgroundColor: Colors.primary }}
-            >
-              <Text className="font-bold text-[16px] text-text-primary">{t('schedule.add_alarm')}</Text>
-            </TouchableOpacity>
-          }
         />
+        <View style={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
+          <TouchableOpacity
+            onPress={() => setSheetVisible(true)}
+            className="rounded-full py-3.5 items-center"
+            style={{ backgroundColor: Colors.primary }}
+          >
+            <Text className="font-bold text-[16px] text-text-primary">{t('schedule.add_alarm')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {alarmSheet}
     </>

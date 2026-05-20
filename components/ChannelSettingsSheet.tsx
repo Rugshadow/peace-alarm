@@ -22,7 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import { useTranslation } from 'react-i18next';
 
-type ListeningOrder = 'newest' | 'oldest';
+type ListeningOrder = 'newest' | 'oldest' | 'shuffle';
 
 const LANGUAGE_CODES = ['all', 'en', 'es', 'fr', 'de', 'zh', 'ja', 'ko', 'ar', 'hi', 'bn', 'ru', 'pt', 'id', 'fil', 'vi'] as const;
 
@@ -273,24 +273,33 @@ export default function ChannelSettingsSheet({
           <Text style={{ color: textSecondary }} className="text-[12px] font-semibold tracking-wider mt-6 mb-3">
             {t('channel_settings.order_label')}
           </Text>
-          <View style={{ backgroundColor: surface }} className="rounded-2xl p-1 flex-row">
-            {(['newest', 'oldest'] as ListeningOrder[]).map((mode) => (
+          <View style={{ backgroundColor: surface, borderRadius: 16, overflow: 'hidden' }}>
+            {([
+              { mode: 'newest', label: t('channel_settings.order_newest'), desc: t('channel_settings.order_newest_desc') },
+              { mode: 'oldest', label: t('channel_settings.order_oldest'), desc: t('channel_settings.order_oldest_desc') },
+              { mode: 'shuffle', label: t('channel_settings.order_shuffle'), desc: t('channel_settings.order_shuffle_desc') },
+            ] as { mode: ListeningOrder; label: string; desc: string }[]).map(({ mode, label, desc }, i, arr) => (
               <TouchableOpacity
                 key={mode}
                 onPress={() => handleOrderChange(mode)}
-                className="flex-1 py-2.5 rounded-xl items-center"
-                style={{ backgroundColor: order === mode ? Colors.primary : 'transparent' }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                  borderBottomColor: bg,
+                  backgroundColor: order === mode ? Colors.primary : 'transparent',
+                }}
               >
-                <Text
-                  className="font-semibold text-[14px]"
-                  style={{ color: order === mode ? Colors.textPrimary : textSecondary }}
-                >
-                  {mode === 'newest' ? t('channel_settings.order_newest') : t('channel_settings.order_oldest')}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: order === mode ? '#000000' : text }}>{label}</Text>
+                  <Text style={{ fontSize: 13, color: textSecondary, marginTop: 2 }}>{desc}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={{ color: textSecondary }} className="text-[13px] mt-3 mb-8 leading-5">
+          <Text style={{ color: textSecondary, fontSize: 13, marginTop: 12, marginBottom: 80, lineHeight: 20 }}>
             {t('channel_settings.order_explanation')}
           </Text>
         </ScrollView>

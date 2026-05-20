@@ -55,7 +55,7 @@ export default function UploadsScreen() {
   const [channelCover, setChannelCover] = useState<string | null>(null);
   const [channelGenre, setChannelGenre] = useState<string>('');
   const [channelBio, setChannelBio] = useState<string>('');
-  const [channelListeningOrder, setChannelListeningOrder] = useState<'newest' | 'oldest'>('newest');
+  const [channelListeningOrder, setChannelListeningOrder] = useState<'newest' | 'oldest' | 'shuffle'>('newest');
   const [channelListeners, setChannelListeners] = useState(0);
   const [channelSettingsVisible, setChannelSettingsVisible] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
@@ -132,12 +132,12 @@ export default function UploadsScreen() {
     // Fetch extra fields separately so a missing column never breaks the main load
     const { data: extra } = await supabase
       .from('channels')
-      .select('listening_order, listeners')
+      .select('listening_order, active_alarms')
       .eq('channel_id', preferredId)
       .maybeSingle();
     if (extra) {
       setChannelListeningOrder((extra as any).listening_order ?? 'newest');
-      setChannelListeners((extra as any).listeners ?? 0);
+      setChannelListeners((extra as any).active_alarms ?? 0);
     }
   };
 
@@ -547,7 +547,7 @@ export default function UploadsScreen() {
                 <Ionicons name="chevron-down" size={16} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text className="text-text-secondary text-[13px] mt-1">
-                {t('uploads.upload', { count: uploads.length })} · {t('uploads.listener', { count: channelListeners })} · {channelGenre}
+                {uploads.length} {uploads.length === 1 ? 'upload' : 'uploads'} · {channelListeners} active {channelListeners === 1 ? 'alarm' : 'alarms'} · {channelGenre}
               </Text>
             </View>
 

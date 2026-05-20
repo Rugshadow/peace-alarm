@@ -73,6 +73,15 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const adjustActiveAlarms = async (channelId: string | undefined, delta: number) => {
+    if (!channelId || !isLoggedInRef.current) return;
+    try {
+      await supabase.rpc('adjust_channel_active_alarms', { p_channel_id: channelId, p_delta: delta });
+    } catch (e) {
+      console.warn('[AlarmsContext] adjustActiveAlarms failed:', e);
+    }
+  };
+
   const persistToSupabase = async (updated: SetAlarm[]) => {
     const { data: { session: currentSession } } = await supabase.auth.getSession();
     if (!currentSession) return;
@@ -102,6 +111,7 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
     const updated = [...alarms, newAlarm];
     setAlarms(updated);
     persist(updated);
+    adjustActiveAlarms(data.channelId, 1);
   };
 
   const removeAlarm = (id: string) => {
@@ -113,6 +123,7 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
     if (alarm?.notificationIds?.length) {
       await cancelAlarmNotifications(alarm.notificationIds);
     }
+    if (alarm?.active) adjustActiveAlarms(alarm.channelId, -1);
     const updated = alarms.filter((a) => a.id !== id);
     setAlarms(updated);
     persist(updated);
@@ -138,6 +149,11 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.warn('Could not reschedule alarm:', e);
     }
+    // If the channel changed, move the active count from the old channel to the new one.
+    if (alarm.active && alarm.channelId !== data.channelId) {
+      adjustActiveAlarms(alarm.channelId, -1);
+      adjustActiveAlarms(data.channelId, 1);
+    }
     const updated = alarms.map((a) =>
       a.id === id ? { ...data, id, active: true, notificationIds } : a
     );
@@ -160,6 +176,7 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
         console.warn('Could not reschedule alarm:', e);
       }
     }
+    adjustActiveAlarms(alarm.channelId, nowActive ? 1 : -1);
     const updated = alarms.map((a) =>
       a.id === id ? { ...a, active: nowActive, notificationIds } : a
     );
@@ -168,10 +185,11 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deactivateByChannelId = async (channelId: string) => {
-    const hasMatch = alarms.some(
-      (a) => a.channelId === channelId && (!a.repeatDays || a.repeatDays.length === 0)
+    const toDeactivate = alarms.filter(
+      (a) => a.channelId === channelId && a.active && (!a.repeatDays || a.repeatDays.length === 0)
     );
-    if (!hasMatch) return;
+    if (toDeactivate.length === 0) return;
+    adjustActiveAlarms(channelId, -toDeactivate.length);
     const updated = alarms.map((a) =>
       a.channelId === channelId && (!a.repeatDays || a.repeatDays.length === 0)
         ? { ...a, active: false }
@@ -186,6 +204,10 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
     setAlarms(merged);
     await persistToSupabase(merged);
     await AsyncStorage.removeItem(OFFLINE_KEY);
+    // Credit active_alarms for each offline alarm being synced to the server.
+    for (const a of offlinePending) {
+      if (a.active) adjustActiveAlarms(a.channelId, 1);
+    }
     setOfflinePending([]);
     setMergePromptVisible(false);
   };

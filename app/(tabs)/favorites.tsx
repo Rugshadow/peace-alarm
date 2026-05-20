@@ -109,7 +109,7 @@ export default function FavoritesScreen() {
         bio: (ch as any).bio ?? '',
         imageUrl: ch.cover_photo ?? undefined,
         uploads,
-        listeningOrder: (ch.listening_order as 'newest' | 'oldest') ?? 'newest',
+        listeningOrder: (ch.listening_order as 'newest' | 'oldest' | 'shuffle') ?? 'newest',
       };
     });
 
